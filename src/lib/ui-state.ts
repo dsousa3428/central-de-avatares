@@ -43,3 +43,44 @@ function subscribe(listener: () => void) {
 export function useSelectedCountry(): string | null {
   return useSyncExternalStore(subscribe, read, () => null);
 }
+
+// ---------------------------------------------------------------------------
+// Aba aberta na tela "Infraestrutura" (a busca abre direto em Celulares ou Perfis)
+// ---------------------------------------------------------------------------
+
+export type InfraTab = "celulares" | "perfis";
+
+let infraTab: InfraTab = "celulares";
+
+export function setInfraTab(tab: InfraTab): void {
+  infraTab = tab;
+  listeners.forEach((listener) => listener());
+}
+
+export function useInfraTab(): InfraTab {
+  return useSyncExternalStore(
+    subscribe,
+    () => infraTab,
+    () => "celulares" as InfraTab,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Janela da busca global (uma só, na moldura; qualquer tela pode abrir)
+// ---------------------------------------------------------------------------
+
+let searchOpen = false;
+
+export function setSearchOpen(open: boolean): void {
+  if (searchOpen === open) return;
+  searchOpen = open;
+  listeners.forEach((listener) => listener());
+}
+
+export function useSearchOpen(): boolean {
+  return useSyncExternalStore(
+    subscribe,
+    () => searchOpen,
+    () => false,
+  );
+}

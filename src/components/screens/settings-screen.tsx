@@ -1,13 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { LogOut, Monitor, Moon, Pencil, ShieldCheck, Sparkles, Sun, Trash2 } from "lucide-react";
+import { KeyRound, LogOut, Monitor, Moon, Pencil, ShieldCheck, Sparkles, Sun, Trash2 } from "lucide-react";
 import { signOut, useAuth } from "@/lib/auth";
 import { countExamples, deleteExamples, EXAMPLES_VERSION, seedExamples } from "@/lib/examples";
 import { plural } from "@/lib/format";
 import { refresh, saveSettings, useStore } from "@/lib/store";
 import { setThemeChoice, useThemeChoice, type ThemeChoice } from "@/lib/theme";
 import { describePlan, planFromSettings } from "@/lib/warmup";
+import { BackupSection } from "@/components/backup/backup-section";
+import { InstallSection } from "@/components/settings/install-section";
+import { LoginPasswordForm } from "@/components/settings/login-password-form";
 import { VaultSettings } from "@/components/vault/vault-settings";
 import { DefaultPlanForm } from "@/components/warmup/default-plan-form";
 import { PageHeader } from "@/components/shell/page-header";
@@ -17,10 +20,6 @@ import { useConfirm } from "@/components/ui/confirm";
 import { Segmented } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/toast";
 
-const UPCOMING: Array<{ step: string; title: string; text: string }> = [
-  { step: "f", title: "App instalável + backup", text: "Instalar no celular, exportar/importar tudo, busca global." },
-];
-
 export function SettingsScreen() {
   const auth = useAuth();
   const db = useStore();
@@ -29,6 +28,7 @@ export function SettingsScreen() {
   const theme = useThemeChoice();
   const [busy, setBusy] = useState<"delete" | "seed" | null>(null);
   const [editingPlan, setEditingPlan] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
   const plan = planFromSettings(db.settings);
 
   const examples = countExamples(db);
@@ -199,33 +199,23 @@ export function SettingsScreen() {
           </Section>
         </div>
 
+        <BackupSection />
+
+        <InstallSection />
+
         <Section title="Sua conta">
           <p className="text-[15px]">
             Você entrou como <strong className="break-all">{auth.status === "signed_in" ? auth.email : "—"}</strong>
           </p>
-          <p className="mt-1 text-sm leading-relaxed text-muted">
-            Sair desconecta só este aparelho. Para trocar a senha de login, use o painel do Supabase (Authentication →
-            Users).
-          </p>
-          <Button variant="secondary" className="mt-3" onClick={() => void signOut()}>
-            <LogOut className="size-4" /> Sair
-          </Button>
-        </Section>
-
-        <Section title="Próximas etapas" subtitle="O que ainda vai entrar no painel, nesta ordem.">
-          <ol className="divide-y divide-line">
-            {UPCOMING.map((item) => (
-              <li key={item.step} className="flex gap-3 py-2.5">
-                <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-surface-2 text-sm font-semibold text-muted">
-                  {item.step}
-                </span>
-                <div className="min-w-0">
-                  <p className="text-[15px] font-medium">{item.title}</p>
-                  <p className="text-sm leading-relaxed text-muted">{item.text}</p>
-                </div>
-              </li>
-            ))}
-          </ol>
+          <p className="mt-1 text-sm leading-relaxed text-muted">Sair desconecta só este aparelho.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={() => setChangingPassword(true)}>
+              <KeyRound className="size-4" /> Trocar senha de login
+            </Button>
+            <Button variant="secondary" onClick={() => void signOut()}>
+              <LogOut className="size-4" /> Sair
+            </Button>
+          </div>
         </Section>
 
         <p className="flex items-start gap-2 px-1 text-xs leading-relaxed text-muted">
@@ -236,6 +226,9 @@ export function SettingsScreen() {
       </div>
 
       {editingPlan ? <DefaultPlanForm onClose={() => setEditingPlan(false)} /> : null}
+      {changingPassword && auth.status === "signed_in" && auth.email ? (
+        <LoginPasswordForm email={auth.email} onClose={() => setChangingPassword(false)} />
+      ) : null}
     </>
   );
 }

@@ -36,7 +36,11 @@ export function toCSV(table: string[][]): string {
 /** Faz o navegador baixar um arquivo de texto. */
 export function downloadText(filename: string, content: string, mime = "text/csv;charset=utf-8"): void {
   // ﻿ avisa o Excel de que o arquivo está em UTF-8 (acentos corretos)
-  const blob = new Blob(["﻿", content], { type: mime });
+  downloadBlob(filename, new Blob(["﻿", content], { type: mime }));
+}
+
+/** Faz o navegador baixar um arquivo (qualquer conteúdo). */
+export function downloadBlob(filename: string, blob: Blob): void {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;

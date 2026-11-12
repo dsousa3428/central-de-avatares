@@ -43,6 +43,8 @@ next-env.d.ts
 
 # cópia gerada de supabase/schema.sql (scripts/copy-schema.mjs)
 /public/schema.sql
+# service worker gerado no build (scripts/build-sw.mjs)
+/public/sw.js
 
 # ambiente local de testes (chaves geradas, registros, capturas de tela)
 /dev/supabase-local/.env

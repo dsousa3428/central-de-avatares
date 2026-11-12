@@ -200,7 +200,7 @@ const { BASE, USER, SHOTS, psql, resetData, ok, section, assert, openPhone, fini
   // ---------------------------------------------------------------
   // No computador: a planilha usa a largura toda
   const browser = await chromium.launch();
-  const desk = await (await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: "pt-BR" })).newPage();
+  const desk = await (await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: "pt-BR", serviceWorkers: "block" })).newPage();
   await desk.goto(BASE + "/login");
   await desk.getByLabel("E-mail").fill(USER.email);
   await desk.getByLabel("Senha", { exact: true }).fill(USER.password);

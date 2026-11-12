@@ -1,6 +1,6 @@
 // Utilidades dos testes de ponta a ponta (Playwright).
 const { execFileSync } = require("node:child_process");
-const { mkdirSync } = require("node:fs");
+const { mkdirSync, readFileSync } = require("node:fs");
 const { join } = require("node:path");
 
 const stackDir = join(__dirname, "..", "supabase-local");
@@ -17,6 +17,23 @@ function psql(sql) {
     ["compose", "exec", "-T", "db", "psql", "-U", "postgres", "-d", "postgres", "-At", "-v", "ON_ERROR_STOP=1", "-c", sql],
     { cwd: stackDir, encoding: "utf8" },
   ).trim();
+}
+
+/**
+ * Devolve ao usuário de teste a senha de login padrão (para o teste que troca a
+ * senha de login não deixar os outros testes de fora, mesmo se falhar no meio).
+ */
+async function resetTestPassword() {
+  const env = readFileSync(join(stackDir, ".env"), "utf8");
+  const key = /^SERVICE_ROLE_KEY=(.+)$/m.exec(env)?.[1]?.trim();
+  if (!key) throw new Error("Não achei a SERVICE_ROLE_KEY em dev/supabase-local/.env");
+  const id = psql(`select id from auth.users where email = '${USER.email}'`);
+  const response = await fetch(`http://localhost:54321/auth/v1/admin/users/${id}`, {
+    method: "PUT",
+    headers: { authorization: `Bearer ${key}`, apikey: key, "content-type": "application/json" },
+    body: JSON.stringify({ password: USER.password }),
+  });
+  if (!response.ok) throw new Error(`Não consegui restaurar a senha de teste: ${response.status} ${await response.text()}`);
 }
 
 /** Apaga os dados do painel (o usuário de teste continua existindo). */
@@ -42,11 +59,16 @@ async function openPhone(chromium, options = {}) {
     locale: "pt-BR",
     timezoneId: "America/Sao_Paulo",
     permissions: ["clipboard-read", "clipboard-write"],
+    // O service worker do aplicativo instalável fica desligado nos testes (ele responde pelas
+    // páginas e mudaria os testes de "sem internet"); só o teste da etapa (f) liga.
+    serviceWorkers: "block",
     ...options,
   });
   const page = await context.newPage();
   const problems = [];
   page.on("console", (m) => {
+    // (o próprio Playwright avisa que bloqueou o service worker, como pedimos acima)
+    if (m.text().includes("Service Worker registration blocked by Playwright")) return;
     if (["error", "warning"].includes(m.type())) problems.push(`[${m.type()}] ${m.text()}`);
   });
   page.on("pageerror", (e) => problems.push(`[pageerror] ${e.message}`));
@@ -103,4 +125,4 @@ function fail(err) {
   process.exit(1);
 }
 
-module.exports = { BASE, USER, SHOTS, psql, resetData, ok, section, assert, openPhone, finish, fail };
+module.exports = { BASE, USER, SHOTS, psql, resetData, resetTestPassword, ok, section, assert, openPhone, finish, fail };

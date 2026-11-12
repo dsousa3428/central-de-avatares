@@ -3,13 +3,15 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Ellipsis, LockKeyhole, LogOut } from "lucide-react";
+import { Ellipsis, LockKeyhole, LogOut, Search } from "lucide-react";
 import { signOut, useAuth } from "@/lib/auth";
 import { cn } from "@/lib/format";
 import { getStore, loadAll, refreshIfStale } from "@/lib/store";
 import { isSupabaseConfigured } from "@/lib/supabase";
+import { setSearchOpen } from "@/lib/ui-state";
 import { lockVault } from "@/lib/vault";
 import { Logo } from "@/components/logo";
+import { SearchDialog } from "@/components/search/search-dialog";
 import { Modal } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
 import { useVault } from "@/components/vault/vault-provider";
@@ -86,6 +88,7 @@ function Navigation({ email }: { email: string | null }) {
     <>
       <Sidebar email={email} attention={attention} />
       <BottomNav attention={attention} />
+      <SearchDialog />
     </>
   );
 }
@@ -155,6 +158,19 @@ function Sidebar({ email, attention }: { email: string | null; attention: number
           <p className="font-semibold">Central de Avatares</p>
           <p className="text-xs text-muted">Painel privado</p>
         </div>
+      </div>
+      <div className="px-3 pb-1">
+        <button
+          type="button"
+          onClick={() => setSearchOpen(true)}
+          className="flex h-10 w-full items-center gap-2.5 rounded-xl border border-line bg-surface-2/60 px-3 text-sm text-muted transition-colors hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        >
+          <Search className="size-4" aria-hidden />
+          <span className="flex-1 text-left">Buscar</span>
+          <kbd className="rounded border border-line bg-surface px-1.5 py-0.5 font-sans text-[11px] leading-none" aria-hidden>
+            Ctrl K
+          </kbd>
+        </button>
       </div>
       <nav className="flex-1 space-y-1 px-3 py-2" aria-label="Menu principal">
         {NAV_ITEMS.map((item) => {
@@ -263,6 +279,19 @@ function BottomNav({ attention }: { attention: number }) {
 
       <Modal open={moreOpen} onClose={() => setMoreOpen(false)} title="Mais" size="sm">
         <ul className="-mx-2 space-y-1">
+          <li>
+            <button
+              type="button"
+              onClick={() => {
+                setMoreOpen(false);
+                setSearchOpen(true);
+              }}
+              className="flex h-12 w-full items-center gap-3 rounded-xl px-3 text-[15px] font-medium transition-colors hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            >
+              <Search className="size-5" aria-hidden />
+              Buscar
+            </button>
+          </li>
           {moreItems.map((item) => {
             const active = isActive(item, pathname);
             const Icon = item.icon;

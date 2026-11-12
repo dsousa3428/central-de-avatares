@@ -9,6 +9,7 @@ import {
   Coffee,
   Fingerprint,
   Flame,
+  Search,
   Smartphone,
   Timer,
   Undo2,
@@ -28,6 +29,7 @@ import {
 } from "@/lib/selectors";
 import { useStore } from "@/lib/store";
 import type { Account, AccountStatus, Avatar, Country } from "@/lib/types";
+import { setSearchOpen } from "@/lib/ui-state";
 import { markDay } from "@/lib/warmup-actions";
 import { ExamplesNotice } from "@/components/common/examples-notice";
 import { PageHeader } from "@/components/shell/page-header";
@@ -107,7 +109,16 @@ export function TodayScreen() {
 
   return (
     <>
-      <PageHeader title="Hoje" subtitle={dateTitle.charAt(0).toUpperCase() + dateTitle.slice(1)} />
+      <PageHeader
+        title="Hoje"
+        subtitle={dateTitle.charAt(0).toUpperCase() + dateTitle.slice(1)}
+        actions={
+          // no computador a busca fica no menu lateral; no celular, aqui e no menu "Mais"
+          <Button size="sm" onClick={() => setSearchOpen(true)} className="md:hidden">
+            <Search className="size-4" /> Buscar
+          </Button>
+        }
+      />
       <ExamplesNotice />
 
       <div className="space-y-4">

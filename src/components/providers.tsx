@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { AuthProvider } from "@/lib/auth";
 import { applyTheme } from "@/lib/theme";
+import { PwaSetup } from "@/components/pwa/pwa-setup";
 import { ConfirmProvider } from "@/components/ui/confirm";
 import { ToastProvider } from "@/components/ui/toast";
 import { VaultProvider } from "@/components/vault/vault-provider";
@@ -28,6 +29,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
         </VaultProvider>
       </ToastProvider>
       <ThemeSync />
+      <PwaSetup />
     </AuthProvider>
   );
 }

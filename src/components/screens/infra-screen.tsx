@@ -7,6 +7,7 @@ import { formatDate } from "@/lib/dates";
 import { describeAccount, usageByPhone, usageByProfile, type Usage } from "@/lib/selectors";
 import { useStore, type Db } from "@/lib/store";
 import type { AntidetectProfile, Phone } from "@/lib/types";
+import { setInfraTab, useInfraTab } from "@/lib/ui-state";
 import { ExamplesNotice } from "@/components/common/examples-notice";
 import { PhoneForm } from "@/components/infra/phone-form";
 import { ProfileForm } from "@/components/infra/profile-form";
@@ -18,11 +19,11 @@ import { Tabs } from "@/components/ui/tabs";
 
 const NO_USAGE: Usage = { live: [], fallen: [] };
 
-type InfraTab = "celulares" | "perfis";
-
 export function InfraScreen() {
   const db = useStore();
-  const [tab, setTab] = useState<InfraTab>("celulares");
+  // (a aba fica fora desta tela para a busca global poder abrir direto em Celulares ou Perfis)
+  const tab = useInfraTab();
+  const setTab = setInfraTab;
   const [phoneForm, setPhoneForm] = useState<Phone | "new" | null>(null);
   const [profileForm, setProfileForm] = useState<AntidetectProfile | "new" | null>(null);
 

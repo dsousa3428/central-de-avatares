@@ -283,14 +283,15 @@ $$;
 -- ---------------------------------------------------------------------
 -- VERSÃO DA ESTRUTURA
 -- O painel pergunta este número quando uma tela depende de algo que foi
--- acrescentado depois (hoje: a troca da senha-mestra). Aumente ao acrescentar.
+-- acrescentado depois (2: a troca da senha-mestra; 3: restaurar backup).
+-- Aumente ao acrescentar.
 -- ---------------------------------------------------------------------
 create or replace function public.cda_schema_version()
 returns integer
 language sql
 immutable
 set search_path = ''
-as $$ select 2 $$;
+as $$ select 3 $$;
 
 revoke all on function public.cda_schema_version() from public, anon;
 grant execute on function public.cda_schema_version() to authenticated;
@@ -365,6 +366,94 @@ $$;
 
 revoke all on function public.cda_vault_rekey(text, jsonb, jsonb) from public, anon;
 grant execute on function public.cda_vault_rekey(text, jsonb, jsonb) to authenticated;
+
+
+-- ---------------------------------------------------------------------
+-- BACKUP: restaurar
+-- Troca TUDO o que o usuário tem no painel pelo conteúdo de um arquivo de
+-- backup gerado pelo próprio painel — de uma vez só: ou troca tudo, ou não
+-- mexe em nada (se qualquer linha der erro, a restauração inteira é desfeita).
+-- Os ids são mantidos (as senhas cifradas de cada conta só abrem com o id da
+-- própria conta) e o dono das linhas passa a ser quem está com o login aberto,
+-- não importa o que o arquivo diga. As regras de segurança (RLS) continuam
+-- valendo: a função só enxerga e só grava linhas do próprio usuário.
+-- ---------------------------------------------------------------------
+create or replace function public.cda_restore_backup(backup jsonb)
+returns void
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  uid uuid := (select auth.uid());
+  data jsonb;
+  cfg jsonb;
+begin
+  if uid is null then
+    raise exception 'cda_restore_no_user' using errcode = '28000';
+  end if;
+  if backup is null or backup ->> 'app' is distinct from 'central-de-avatares'
+     or jsonb_typeof(backup -> 'tables') is distinct from 'object' then
+    raise exception 'cda_restore_invalid' using errcode = '22023';
+  end if;
+  data := backup -> 'tables';
+  cfg := backup -> 'settings';
+
+  -- 1) apaga o que existe (de quem cita para quem é citado)
+  delete from public.activity_log where user_id = uid;
+  delete from public.weekly_sales where user_id = uid;
+  delete from public.warmups where user_id = uid;
+  delete from public.accounts where user_id = uid;
+  delete from public.avatars where user_id = uid;
+  delete from public.countries where user_id = uid;
+  delete from public.phones where user_id = uid;
+  delete from public.antidetect_profiles where user_id = uid;
+
+  -- 2) grava o conteúdo do arquivo (de quem é citado para quem cita)
+  insert into public.countries
+    select (jsonb_populate_record(null::public.countries, item || jsonb_build_object('user_id', uid))).*
+      from jsonb_array_elements(coalesce(data -> 'countries', '[]'::jsonb)) as item;
+  insert into public.phones
+    select (jsonb_populate_record(null::public.phones, item || jsonb_build_object('user_id', uid))).*
+      from jsonb_array_elements(coalesce(data -> 'phones', '[]'::jsonb)) as item;
+  insert into public.antidetect_profiles
+    select (jsonb_populate_record(null::public.antidetect_profiles, item || jsonb_build_object('user_id', uid))).*
+      from jsonb_array_elements(coalesce(data -> 'antidetect_profiles', '[]'::jsonb)) as item;
+  insert into public.avatars
+    select (jsonb_populate_record(null::public.avatars, item || jsonb_build_object('user_id', uid))).*
+      from jsonb_array_elements(coalesce(data -> 'avatars', '[]'::jsonb)) as item;
+  insert into public.accounts
+    select (jsonb_populate_record(null::public.accounts, item || jsonb_build_object('user_id', uid))).*
+      from jsonb_array_elements(coalesce(data -> 'accounts', '[]'::jsonb)) as item;
+  insert into public.warmups
+    select (jsonb_populate_record(null::public.warmups, item || jsonb_build_object('user_id', uid))).*
+      from jsonb_array_elements(coalesce(data -> 'warmups', '[]'::jsonb)) as item;
+  insert into public.weekly_sales
+    select (jsonb_populate_record(null::public.weekly_sales, item || jsonb_build_object('user_id', uid))).*
+      from jsonb_array_elements(coalesce(data -> 'weekly_sales', '[]'::jsonb)) as item;
+  insert into public.activity_log
+    select (jsonb_populate_record(null::public.activity_log, item || jsonb_build_object('user_id', uid))).*
+      from jsonb_array_elements(coalesce(data -> 'activity_log', '[]'::jsonb)) as item;
+
+  -- 3) configurações (o cofre vem junto: sem ele as senhas cifradas não abririam)
+  insert into public.settings (user_id, vault, warmup_defaults, brl_rates, prefs)
+  values (
+    uid,
+    nullif(cfg -> 'vault', 'null'::jsonb),
+    nullif(cfg -> 'warmup_defaults', 'null'::jsonb),
+    coalesce(nullif(cfg -> 'brl_rates', 'null'::jsonb), '{}'::jsonb),
+    coalesce(nullif(cfg -> 'prefs', 'null'::jsonb), '{}'::jsonb)
+  )
+  on conflict (user_id) do update
+    set vault = excluded.vault,
+        warmup_defaults = excluded.warmup_defaults,
+        brl_rates = excluded.brl_rates,
+        prefs = excluded.prefs;
+end
+$$;
+
+revoke all on function public.cda_restore_backup(jsonb) from public, anon;
+grant execute on function public.cda_restore_backup(jsonb) to authenticated;
 
 
 -- avisa a API do Supabase que a estrutura mudou

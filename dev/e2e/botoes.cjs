@@ -13,7 +13,7 @@ async function scanWidth(WIDTH) {
 
   resetData();
   const browser = await chromium.launch();
-  const ctx = await browser.newContext({ viewport: { width: WIDTH, height: 780 }, locale: 'pt-BR', timezoneId: 'UTC' });
+  const ctx = await browser.newContext({ viewport: { width: WIDTH, height: 780 }, locale: 'pt-BR', timezoneId: 'UTC', serviceWorkers: 'block' });
   const p = await ctx.newPage();
   await p.goto(BASE + '/login');
   await p.getByLabel('E-mail').fill(USER.email);
@@ -78,6 +78,12 @@ async function scanWidth(WIDTH) {
   };
 
   await scan('Hoje');
+  await p.getByRole('button', { name: 'Buscar', exact: true }).click();
+  await dialog().getByLabel('O que você procura?').fill('fra');
+  await scan('busca');
+  // (num campo de busca o primeiro Esc só limpa o texto: fecha pelo botão)
+  await dialog().getByRole('button', { name: 'Fechar' }).click();
+  await p.waitForFunction(() => !document.querySelector('dialog[open]'));
   await p.getByRole('link', { name: 'Países' }).click();
   await p.getByRole('heading', { name: 'Países', exact: true }).waitFor();
   await scan('Países');
@@ -142,6 +148,15 @@ async function scanWidth(WIDTH) {
   await close();
   await more('Configurações');
   await scan('Configurações');
+  await p.getByRole('button', { name: 'Trocar senha de login' }).click();
+  await scan('trocar senha de login'); await close();
+  await p.getByLabel('Arquivo de backup para restaurar').setInputFiles({
+    name: 'backup.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify({ app: 'central-de-avatares', format: 1, exported_at: new Date().toISOString(), tables: { countries: [], phones: [], antidetect_profiles: [], avatars: [], accounts: [], warmups: [], weekly_sales: [], activity_log: [] }, settings: null })),
+  });
+  await dialog().getByRole('heading', { name: 'Restaurar backup' }).waitFor();
+  await scan('restaurar backup'); await close();
   await p.getByRole('button', { name: 'Editar', exact: true }).click();
   await scan('padrão de aquecimento');
   await p.screenshot({ path: OUT + `${WIDTH}-padrao.png` });

@@ -705,6 +705,43 @@ export function rekeyVault(
   });
 }
 
+/** O banco ainda não tem a função de restaurar backup (falta rodar o script SQL atualizado). */
+export const RESTORE_UNAVAILABLE = "restore_unavailable";
+
+/**
+ * Restaura um backup de uma vez só (função `cda_restore_backup` do banco): troca
+ * tudo que está no painel pelo conteúdo do arquivo, mantendo os ids. Ou troca
+ * tudo, ou não mexe em nada. Em seguida recarrega a memória inteira.
+ * (Quem chama tranca o cofre antes: a configuração dele pode ter mudado.)
+ */
+export function restoreBackup(backup: unknown): Promise<void> {
+  const userId = state.userId;
+  if (!userId) return Promise.reject(new AppError("auth", "Sua sessão expirou. Entre novamente."));
+  return tracked(async () => {
+    const { error } = await getSupabase().rpc("cda_restore_backup", { backup });
+    if (error) {
+      if (isMissingFunction(error)) {
+        throw new AppError(
+          "schema",
+          "Para restaurar um backup é preciso atualizar o banco de dados uma vez (o script SQL mudou).",
+          RESTORE_UNAVAILABLE,
+          error.message ?? "",
+        );
+      }
+      throw error;
+    }
+    // A restauração já está gravada: se a leitura logo em seguida falhar, não é ela que falhou.
+    rowTxns.clear();
+    try {
+      const db = await fetchEverything();
+      if (state.userId !== userId) return;
+      setState({ ...db, status: "ready", error: null, loadingMessage: null, loadedAt: Date.now() });
+    } catch {
+      void refresh();
+    }
+  });
+}
+
 /** Depois de uma mudança feita de uma vez no banco: traz de volta as configurações e as contas. */
 async function reloadVaultData(userId: string): Promise<void> {
   const [settings, accounts] = await Promise.all([fetchSettings(), fetchAll("accounts")]);

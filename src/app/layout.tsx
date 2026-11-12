@@ -25,6 +25,8 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
   // Evita que o iPhone transforme números (chips, perfis) em links de ligação.
   formatDetection: { telephone: false, email: false, address: false },
+  // Instalado na tela inicial do iPhone, abre como aplicativo (sem a barra do Safari).
+  appleWebApp: { capable: true, title: "Avatares", statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {

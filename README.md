@@ -14,7 +14,7 @@ Painel **privado**, de um único usuário, para organizar contas de Instagram de
 | **c** | Cofre de senhas (criptografia no aparelho, com senha-mestra) | ✅ pronta |
 | **d** | Vendas semanais, totais, gráfico, ranking, conversão para BRL | ✅ pronta |
 | **e** | Botão "Conta caiu" + assistente de reposição com checklist + avisos automáticos + quedas | ✅ pronta |
-| **f** | App instalável (PWA), backup (exportar/importar), busca global | a fazer |
+| **f** | App instalável, backup (baixar e restaurar), busca global, trocar a senha de login | ✅ pronta |
 
 ---
 
@@ -134,7 +134,10 @@ Daqui para frente, toda atualização enviada ao GitHub é publicada sozinha pel
   - **Cotações**: você digita quanto vale cada moeda em reais e o painel passa a somar moedas diferentes em reais. Cada venda guarda a cotação do dia em que foi lançada, para o total de uma semana antiga não mudar quando você atualizar a cotação (as vendas lançadas antes de a moeda ter cotação ficam com a primeira que você digitar). Digitou uma cotação errada? Corrija e marque **Usar também nas vendas já lançadas**.
 - **Planilha** — os mesmos dados em formato de tabela (Contas, Avatares, Vendas, Celulares e Perfis). Toque no título de uma coluna para ordenar, use os filtros e a busca, e edite direto nas células das colunas marcadas com um lápis. **Copiar** leva a tabela para colar no Excel ou no Google Planilhas; **Baixar** gera um arquivo CSV.
 - **Infraestrutura** — celulares e perfis do anti-detect, mostrando qual conta está em cada um, quais estão livres e quais já foram usados por conta que caiu. No celular fica no botão **Mais**.
-- **Configurações** — tema claro/escuro, cofre de senhas (criar ou trocar a senha-mestra, trancar, tempo para trancar sozinho), padrão de aquecimento, apagar (ou recriar) os dados de exemplo e sair. No celular fica no botão **Mais**.
+- **Buscar** — encontra avatares, contas (pelo @ ou pelo e-mail), celulares, perfis anti-detect (pelo número) e países. No celular: botão **Buscar** na tela Hoje ou no menu **Mais**; no computador: no menu lateral ou com **Ctrl+K**.
+- **Backup** (em Configurações) — **Baixar backup** gera um arquivo só (.json) com tudo do painel; guarde-o fora do painel (Google Drive, e-mail para você mesmo…). As senhas do cofre vão junto, mas continuam cifradas: só abrem com a sua senha-mestra. **Baixar planilhas** gera um .zip com uma tabela (.csv) por assunto, para abrir no Excel ou no Google Planilhas (sem as senhas). **Restaurar backup** troca tudo o que está no painel pelo conteúdo de um arquivo de backup: o painel mostra o que o arquivo tem, pede para digitar RESTAURAR e, antes de trocar, baixa um backup do que existia.
+- **Instalar no celular** (em Configurações) — o painel pode ficar na tela inicial e abrir como aplicativo. iPhone (Safari): **Compartilhar → Adicionar à Tela de Início**. Android (Chrome): **três pontinhos → Instalar app**. Ele continua precisando de internet; sem conexão, mostra um aviso de "Sem internet".
+- **Configurações** — tema claro/escuro, cofre de senhas (criar ou trocar a senha-mestra, trancar, tempo para trancar sozinho), padrão de aquecimento, backup, instalar no celular, apagar (ou recriar) os dados de exemplo, trocar a senha de login e sair. No celular fica no botão **Mais**.
 - **Exemplos** — Itália e Fra' Salvio vêm com dados fictícios. Se quiser aproveitar um exemplo como dado seu, abra o avatar (ou o país) e toque em **Ficar com este avatar / país**: ele deixa de ser exemplo e não é mais apagado em "Apagar exemplos".
 
 O painel avisa quando você escolhe um celular, perfil ou proxy que já está em uso por outra conta, e pede confirmação para usar um que foi de uma conta que caiu.
@@ -148,6 +151,12 @@ O painel avisa quando você escolhe um celular, perfil ou proxy que já está em
 - O painel pede aos buscadores para **não ser indexado** e não pode ser embutido em outros sites.
 - Como camada extra, o navegador é instruído (Content-Security-Policy) a só carregar código do próprio painel e a só abrir conexões de dados com o painel e com o seu Supabase.
 
+### Backup e aplicativo instalado
+
+- O arquivo de backup tem **todos os seus dados** (e-mails das contas, proxies, anotações, vendas…). Só as senhas do cofre vão cifradas. Guarde o arquivo em um lugar só seu.
+- **Restaurar um backup troca tudo** o que está no painel. Por isso o painel pede uma confirmação digitada e, antes de trocar, baixa um backup do que existia. Na primeira vez ele pede para rodar o script SQL atualizado no Supabase (mostra o botão **Copiar script SQL** e o passo a passo).
+- Instalado no celular, o painel guarda no aparelho só o próprio programa (para abrir mais rápido) e a página de "Sem internet". **Nenhum dado seu fica guardado no aparelho** por causa disso: os dados continuam vindo do Supabase a cada uso.
+
 ### Cofre de senhas
 
 - Senhas, e-mails de recuperação e códigos de backup são **criptografados no seu aparelho** antes de irem para o banco. O banco só guarda texto cifrado; sem a senha-mestra, ninguém (nem eu, nem o Supabase) consegue ler.
@@ -155,7 +164,7 @@ O painel avisa quando você escolhe um celular, perfil ou proxy que já está em
 - **Se você perder a senha-mestra, as senhas guardadas não podem ser recuperadas.** Anote num papel e guarde em lugar seguro. A única saída, nesse caso, é apagar o cofre (Configurações → Cofre de senhas → *Esqueci a senha-mestra*) e guardar as senhas de novo.
 - A senha-mestra é diferente da senha de login. Use outra: no mínimo 12 caracteres, de preferência uma frase de 3 ou 4 palavras soltas. Se o navegador oferecer para salvá-la, recuse.
 - O cofre tranca sozinho depois de alguns minutos sem uso, ao recarregar a página e ao sair da conta. Um campo que você mandou mostrar se esconde sozinho depois de 30 segundos.
-- A Planilha e as exportações nunca incluem senhas — só dizem se a conta tem senhas guardadas.
+- A Planilha e as planilhas do backup (.csv) nunca incluem senhas — só dizem se a conta tem senhas guardadas. O arquivo de backup (.json) leva as senhas **cifradas**, do jeito que estão no banco: elas só abrem com a senha-mestra.
 
 - Ao copiar uma senha, o painel tenta limpar a área de transferência depois de 1 minuto e quando o cofre tranca (o navegador só permite isso com o painel aberto na frente).
 - **Trocar a senha-mestra** (Configurações → Cofre de senhas): todas as senhas guardadas são cifradas de novo com a senha nova, de uma vez só. Na primeira vez o painel pede para rodar o script SQL atualizado no Supabase — ele mesmo mostra o botão **Copiar script SQL** e o passo a passo. Se você acha que alguém descobriu a senha antiga, troque também as senhas das próprias contas.
