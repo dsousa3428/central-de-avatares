@@ -4,7 +4,17 @@ import { useState } from "react";
 import { Plus, TrendingUp } from "lucide-react";
 import { todayISO } from "@/lib/dates";
 import { formatMoney, plural } from "@/lib/format";
-import { describeTotals, inBRL, monthKey, monthName, salesOfMonth, sumSales, weekAgo, weekLabel, weekStart } from "@/lib/sales";
+import {
+  currentMonth,
+  describeTotals,
+  inBRL,
+  monthName,
+  salesOfMonth,
+  sumSales,
+  weekAgo,
+  weekLabel,
+  weekStart,
+} from "@/lib/sales";
 import { generationLabel } from "@/lib/selectors";
 import { useStore } from "@/lib/store";
 import type { Account, Avatar } from "@/lib/types";
@@ -53,7 +63,8 @@ export function SalesTab({ avatar, accounts }: SalesTabProps) {
   }
 
   const total = describeTotals(sumSales(sales, rates));
-  const monthTotals = sumSales(salesOfMonth(sales, monthKey(today)), rates);
+  const thisMonth = currentMonth(today);
+  const monthTotals = sumSales(salesOfMonth(sales, thisMonth), rates);
   const month = describeTotals(monthTotals);
   const byAccount = accounts
     .map((account) => ({ account, totals: sumSales(sales.filter((sale) => sale.account_id === account.id), rates) }))
@@ -70,7 +81,7 @@ export function SalesTab({ avatar, accounts }: SalesTabProps) {
             <dd className="text-xs text-muted">{plural(sales.length, "semana lançada", "semanas lançadas")}</dd>
           </div>
           <div>
-            <dt className="text-sm text-muted">Em {monthName(monthKey(today))}</dt>
+            <dt className="text-sm text-muted">Em {monthName(thisMonth, today)}</dt>
             <dd className="mt-0.5 text-xl font-semibold tracking-tight">{monthTotals.entries === 0 ? "—" : month.primary}</dd>
             {month.secondary ? <dd className="text-xs text-muted">{month.secondary}</dd> : null}
           </div>

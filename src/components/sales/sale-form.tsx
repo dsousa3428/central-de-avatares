@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Trash2 } from "lucide-react";
-import { clean, formatMoney, parseCount, parseDecimal } from "@/lib/format";
+import { clean, formatMoney, parseCount, parseDecimal, parseRate } from "@/lib/format";
 import { CURRENCIES } from "@/lib/reference";
-import { accountForWeek, defaultCurrency, formatAmount, rateOf, weekLabel, weekStart } from "@/lib/sales";
+import { accountForWeek, defaultCurrency, formatAmount, formatRate, weekLabel, weekStart } from "@/lib/sales";
 import { deleteSale, saleOf, saveSale } from "@/lib/sales-actions";
 import { accountsOf, generationLabel } from "@/lib/selectors";
 import { useStore, type Db } from "@/lib/store";
@@ -31,6 +31,8 @@ interface SaleFormProps {
 interface Values {
   amount: string;
   currency: string;
+  /** A cotação para reais guardada neste lançamento; em branco = a atual da moeda. */
+  rate: string;
   count: string;
   accountId: string;
   notes: string;
@@ -44,6 +46,7 @@ function valuesFor(db: Db, avatar: Avatar, week: string): Values {
   return {
     amount: sale ? formatAmount(Number(sale.amount)) : "",
     currency: sale?.currency ?? defaultCurrency(mine, avatar.product_currency, country?.currency),
+    rate: sale && sale.brl_rate !== null ? formatRate(Number(sale.brl_rate)) : "",
     count: sale?.sales_count !== null && sale?.sales_count !== undefined ? String(sale.sales_count) : "",
     accountId: sale ? (sale.account_id ?? "") : (accountForWeek(accountsOf(db, avatar.id), week)?.id ?? ""),
     notes: sale?.notes ?? "",
@@ -59,19 +62,36 @@ export function SaleForm({ avatar, week: initialWeek, pickWeek, onClose }: SaleF
   const today = todayISO();
   const [week, setWeek] = useState(initialWeek);
   const [values, setValues] = useState<Values>(() => valuesFor(db, avatar, initialWeek));
+  // o que foi digitado para uma semana ainda sem lançamento (acompanha a troca de semana)
+  const fresh = useRef<Values | null>(null);
 
   const sale = saleOf(db.sales, avatar.id, week);
   const accounts = accountsOf(db, avatar.id);
   const amount = parseDecimal(values.amount);
-  const rate = rateOf({ currency: values.currency, brl_rate: sale?.currency === values.currency ? sale.brl_rate : null }, rates);
+  const foreign = values.currency !== "BRL";
+  // a cotação deste lançamento: a digitada aqui; em branco, a atual da moeda (se houver)
+  const currentRate = rates[values.currency] ?? null;
+  const typedRate = values.rate.trim() ? parseRate(values.rate) : null;
+  const rate = values.rate.trim() ? typedRate : currentRate;
 
   function set<K extends keyof Values>(key: K, value: Values[K]) {
     setValues((current) => ({ ...current, [key]: value }));
   }
 
+  function changeCurrency(currency: string) {
+    // a cotação guardada era da outra moeda: volta para "a atual"
+    setValues((current) => ({ ...current, currency, rate: "" }));
+  }
+
   function changeWeek(next: string) {
+    // Cada semana tem o seu lançamento: indo para uma semana já lançada, a janela mostra o
+    // que está lançado nela. Mas o que foi digitado para uma semana ainda em branco não se
+    // perde — acompanha a troca para outra semana em branco (quem errou a semana só troca).
+    if (!sale) fresh.current = values;
+    const there = valuesFor(db, avatar, next);
+    const typed = fresh.current;
     setWeek(next);
-    setValues(valuesFor(db, avatar, next)); // cada semana tem o seu lançamento
+    setValues(saleOf(db.sales, avatar.id, next) || !typed ? there : { ...typed, accountId: there.accountId });
   }
 
   async function submit() {
@@ -80,12 +100,16 @@ export function SaleForm({ avatar, week: initialWeek, pickWeek, onClose }: SaleF
     if (amount > 9_999_999_999) invalid("Esse valor é grande demais. Confira os números.");
     const count = values.count.trim() ? parseCount(values.count) : null;
     if (values.count.trim() && count === null) invalid("Não entendi a quantidade de vendas. Exemplo: 12.");
+    if (foreign && values.rate.trim() && (typedRate === null || typedRate <= 0 || typedRate > 1_000_000)) {
+      invalid(`Não entendi a cotação. Exemplo: 6,10 (quantos reais vale 1 ${values.currency}).`);
+    }
     await saveSale(avatar, week, {
       amount,
       currency: values.currency,
       sales_count: count,
       notes: clean(values.notes),
       account_id: values.accountId || null,
+      brl_rate: foreign ? rate : null,
     });
     toast.success(sale ? "Venda atualizada" : "Venda lançada");
   }
@@ -142,7 +166,7 @@ export function SaleForm({ avatar, week: initialWeek, pickWeek, onClose }: SaleF
           />
         </Field>
         <Field label="Moeda">
-          <Select value={values.currency} onChange={(e) => set("currency", e.target.value)}>
+          <Select value={values.currency} onChange={(e) => changeCurrency(e.target.value)}>
             {known ? null : <option value={values.currency}>{values.currency}</option>}
             {CURRENCIES.map((currency) => (
               <option key={currency.code} value={currency.code}>
@@ -152,14 +176,26 @@ export function SaleForm({ avatar, week: initialWeek, pickWeek, onClose }: SaleF
           </Select>
         </Field>
       </div>
-      {values.currency !== "BRL" ? (
-        <p className="-mt-2 text-xs leading-relaxed text-muted">
-          {rate === null
-            ? "Sem cotação para reais nesta moeda. Digite em Vendas → Cotações para somar tudo em reais."
-            : amount !== null && amount > 0
-              ? `≈ ${formatMoney(amount * rate, "BRL")} (1 ${values.currency} = ${formatMoney(rate, "BRL")})`
-              : `Cotação: 1 ${values.currency} = ${formatMoney(rate, "BRL")}`}
-        </p>
+      {foreign ? (
+        <Field
+          label={`Cotação: 1 ${values.currency} em reais`}
+          optional
+          hint={
+            rate !== null && rate > 0 && amount !== null && amount > 0
+              ? `≈ ${formatMoney(amount * rate, "BRL")} nesta semana.${values.rate.trim() ? "" : " Em branco, vale a cotação atual."}`
+              : currentRate !== null
+                ? "Em branco, vale a cotação atual (a de Vendas → Cotações)."
+                : "Sem cotação, esta venda fica fora dos totais em reais. Você também pode digitar em Vendas → Cotações."
+          }
+        >
+          <Input
+            value={values.rate}
+            onChange={(e) => set("rate", e.target.value)}
+            inputMode="decimal"
+            autoComplete="off"
+            placeholder={currentRate !== null ? formatRate(currentRate) : "sem cotação"}
+          />
+        </Field>
       ) : null}
 
       <Field label="Quantidade de vendas" optional>

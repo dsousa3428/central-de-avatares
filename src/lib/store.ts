@@ -550,6 +550,20 @@ export function deleteRow(table: TableName, id: string): Promise<void> {
   });
 }
 
+/**
+ * Guarda a mesma cotação em vários lançamentos de uma moeda, de uma vez só: nos
+ * que ainda não têm cotação guardada ou, com `all`, em todos os que estão com
+ * outra. As linhas mudam de versão no banco: quem chama recarrega em seguida
+ * (`refresh`), antes de devolver a tela ao usuário.
+ */
+export function stampSalesRate(currency: string, rate: number, all: boolean): Promise<void> {
+  return tracked(async () => {
+    const query = getSupabase().from("weekly_sales").update({ brl_rate: rate }).eq("currency", currency);
+    const { error } = await (all ? query.or(`brl_rate.is.null,brl_rate.neq.${rate}`) : query.is("brl_rate", null));
+    if (error) throw error;
+  });
+}
+
 // (`vault` fica de fora de propósito: o cofre só é gravado por replaceVault / rekeyVault / eraseVault)
 type SettingsPatch = Partial<Pick<Settings, "warmup_defaults" | "brl_rates" | "prefs">>;
 

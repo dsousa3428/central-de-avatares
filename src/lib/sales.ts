@@ -1,12 +1,15 @@
 // Regras de vendas (sem tela e sem banco): semanas, somas e conversão para reais.
 //
 // - A semana vai de segunda a domingo; cada lançamento vale para uma semana
-//   inteira de um avatar (`week_start` = a segunda-feira).
+//   inteira de um avatar (`week_start` = a segunda-feira). O mês de uma semana é
+//   aquele em que cai a maior parte dos dias dela (o da quinta-feira).
 // - Cada lançamento tem a sua moeda. Para somar moedas diferentes, o painel
 //   converte para reais com a cotação que o dono digita (`settings.brl_rates`:
 //   quantos reais vale 1 unidade da moeda). A cotação em vigor fica guardada no
 //   próprio lançamento (`brl_rate`), para o total de uma semana antiga não mudar
-//   quando a cotação é atualizada; lançamento sem cotação guardada usa a atual.
+//   quando a cotação é atualizada. Lançamento feito antes de a moeda ter cotação
+//   fica sem nenhuma guardada (usa a atual) até a primeira ser digitada — aí ela é
+//   gravada nele também (ver `saveRates`).
 
 import { addDays, daysBetween, parseISODate } from "./dates";
 import { formatMoney } from "./format";
@@ -86,9 +89,20 @@ export function weekTick(week: string): string {
   return `${start.getDate()}/${start.getMonth() + 1}`;
 }
 
-/** "2026-11" — o mês de uma semana é o mês da sua segunda-feira. */
-export function monthKey(iso: string): string {
-  return iso.slice(0, 7);
+/**
+ * "2026-11" — o mês de uma semana é o mês em que cai a maior parte dos dias dela
+ * (o mês da quinta-feira): a semana de 30 de nov a 6 de dez conta para dezembro.
+ */
+export function monthOfWeek(week: string): string {
+  return addDays(week, 3).slice(0, 7);
+}
+
+/**
+ * O mês "em andamento": o da semana atual. É nele que entra o lançamento desta
+ * semana — por isso o total do mês nunca fica vazio com a semana já lançada.
+ */
+export function currentMonth(today: string): string {
+  return monthOfWeek(weekStart(today));
 }
 
 /** "novembro" (ou "novembro de 2025" quando não é o ano de `today`). */
@@ -147,7 +161,9 @@ export interface Totals {
   byCurrency: Record<string, number>;
   /** Soma em reais de tudo que tem cotação. */
   brl: number;
-  /** Moedas com valor lançado e sem cotação: o total em reais não as inclui. */
+  /** O que ficou fora do total em reais por falta de cotação: quanto, em cada moeda. */
+  unconverted: Record<string, number>;
+  /** As moedas de `unconverted`, em ordem alfabética. */
   missing: string[];
   /** Quantos lançamentos entraram na soma. */
   entries: number;
@@ -155,11 +171,11 @@ export interface Totals {
   units: number;
 }
 
-export const NO_SALES: Totals = { byCurrency: {}, brl: 0, missing: [], entries: 0, units: 0 };
+export const NO_SALES: Totals = { byCurrency: {}, brl: 0, unconverted: {}, missing: [], entries: 0, units: 0 };
 
 export function sumSales(sales: readonly WeeklySale[], rates: Rates): Totals {
   const byCurrency: Record<string, number> = {};
-  const missing = new Set<string>();
+  const unconverted: Record<string, number> = {};
   let brl = 0;
   let units = 0;
   for (const sale of sales) {
@@ -168,13 +184,13 @@ export function sumSales(sales: readonly WeeklySale[], rates: Rates): Totals {
     byCurrency[currency] = round2((byCurrency[currency] ?? 0) + amount);
     const converted = inBRL(sale, rates);
     if (converted === null) {
-      if (amount !== 0) missing.add(currency);
+      if (amount !== 0) unconverted[currency] = round2((unconverted[currency] ?? 0) + amount);
     } else {
       brl = round2(brl + converted);
     }
     units += sale.sales_count ?? 0;
   }
-  return { byCurrency, brl, missing: [...missing].sort(), entries: sales.length, units };
+  return { byCurrency, brl, unconverted, missing: Object.keys(unconverted).sort(), entries: sales.length, units };
 }
 
 /** As moedas com algum valor na soma, da maior para a menor quantia. */
@@ -213,7 +229,8 @@ export function amountIn(totals: Totals, unit: Unit): number {
  *  - uma moeda só → o valor nela ("€ 1.234,00") e, embaixo, o equivalente em reais
  *    (se houver cotação);
  *  - várias moedas → o total em reais e, embaixo, quanto foi em cada moeda;
- *  - se falta cotação de alguma, o que não pôde ser convertido aparece somado ao lado.
+ *  - se falta cotação de alguma, só o que não pôde ser convertido aparece somado ao
+ *    lado (o que já está no total em reais não é contado de novo).
  */
 export function describeTotals(totals: Totals): { primary: string; secondary: string | null } {
   const currencies = currenciesOf(totals);
@@ -222,20 +239,22 @@ export function describeTotals(totals: Totals): { primary: string; secondary: st
     return { primary: totals.entries === 0 ? "—" : formatMoney(0, only ?? "BRL"), secondary: null };
   }
   const each = (code: string) => formatMoney(totals.byCurrency[code], code);
+  const left = (code: string) => formatMoney(totals.unconverted[code] ?? 0, code);
   if (currencies.length === 1) {
     const code = currencies[0];
     if (code === "BRL") return { primary: each(code), secondary: null };
-    return {
-      primary: each(code),
-      secondary: totals.missing.includes(code) ? null : `≈ ${formatMoney(totals.brl, "BRL")}`,
-    };
+    if (!totals.missing.includes(code)) return { primary: each(code), secondary: `≈ ${formatMoney(totals.brl, "BRL")}` };
+    // parte convertida (lançamentos com cotação guardada) e parte ainda sem cotação
+    const partly = totals.brl !== 0 ? `≈ ${formatMoney(totals.brl, "BRL")} + ${left(code)} sem cotação` : null;
+    return { primary: each(code), secondary: partly };
   }
   if (totals.missing.length === 0) {
     return { primary: formatMoney(totals.brl, "BRL"), secondary: currencies.map(each).join(" + ") };
   }
-  const converted = currencies.some((code) => !totals.missing.includes(code));
   return {
-    primary: [converted ? formatMoney(totals.brl, "BRL") : null, ...totals.missing.map(each)].filter(Boolean).join(" + "),
+    primary: [totals.brl !== 0 ? formatMoney(totals.brl, "BRL") : null, ...totals.missing.map(left)]
+      .filter(Boolean)
+      .join(" + "),
     secondary: `falta a cotação de ${totals.missing.join(", ")}`,
   };
 }
@@ -253,8 +272,9 @@ export function salesOfWeek(sales: readonly WeeklySale[], week: string): WeeklyS
   return sales.filter((sale) => sale.week_start === week);
 }
 
+/** Os lançamentos das semanas de um mês ("2026-11"), pela regra de `monthOfWeek`. */
 export function salesOfMonth(sales: readonly WeeklySale[], key: string): WeeklySale[] {
-  return sales.filter((sale) => monthKey(sale.week_start) === key);
+  return sales.filter((sale) => monthOfWeek(sale.week_start) === key);
 }
 
 /** Vendas de `from` (inclusive) em diante; `from` null = todas. */
@@ -352,6 +372,13 @@ export function currencySymbol(code: string): string {
 /** Um valor para mostrar dentro de um campo de digitação: "1.234,50". */
 export function formatAmount(value: number): string {
   return new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+}
+
+/** Uma cotação para mostrar dentro de um campo de digitação: "6,10", "5,4321". */
+export function formatRate(value: number): string {
+  return new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 6, useGrouping: false }).format(
+    value,
+  );
 }
 
 // ---------------------------------------------------------------------------

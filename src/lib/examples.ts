@@ -17,7 +17,7 @@ import type {
   Phone,
   ReferenceProfile,
 } from "./types";
-import { accountForWeek, addWeeks, weekStart } from "./sales";
+import { accountForWeek, addWeeks, cleanRates, weekStart } from "./sales";
 import type { Db } from "./store";
 import { buildDays, DEFAULT_WARMUP_PLAN } from "./warmup";
 
@@ -282,6 +282,8 @@ async function insertExampleSales(
   avatarId: string,
   accounts: Array<Pick<Account, "id" | "generation" | "created_on" | "fell_on">>,
   today: string,
+  /** A cotação do euro já digitada pelo dono, se houver (fica guardada em cada venda, como num lançamento normal). */
+  rate: number | null = null,
 ): Promise<void> {
   const thisWeek = weekStart(today);
   const rows = EXAMPLE_WEEKLY_UNITS.map((units, index) => {
@@ -294,6 +296,7 @@ async function insertExampleSales(
       amount: units * EXAMPLE_PRICE,
       currency: "EUR",
       sales_count: units,
+      brl_rate: rate,
     };
   });
   const { error } = await getSupabase().from("weekly_sales").insert(rows);
@@ -328,6 +331,7 @@ export async function upgradeExamples(db: Db, fromVersion: number): Promise<bool
         avatar.id,
         db.accounts.filter((account) => account.avatar_id === avatar.id),
         today,
+        cleanRates(db.settings?.brl_rates).EUR ?? null,
       );
       changed = true;
     }
@@ -463,9 +467,11 @@ export async function keepExampleCountry(countryId: string): Promise<void> {
 }
 
 /**
- * "Ficar com este avatar": o avatar, as contas dele (com histórico, aquecimento
- * e vendas), o país e os celulares/perfis usados pelas contas deixam de ser
- * exemplo. Nada é apagado nem alterado além da marca de exemplo.
+ * "Ficar com este avatar": o avatar, as contas dele (com histórico e
+ * aquecimento), o país e os celulares/perfis usados pelas contas deixam de ser
+ * exemplo. Só as vendas de exemplo são apagadas: são valores inventados, e
+ * ficariam misturados aos totais de verdade (uma venda que o dono lançou ou
+ * corrigiu já não é exemplo — essa fica).
  */
 export async function keepExampleAvatar(db: Db, avatarId: string): Promise<void> {
   const avatar = db.avatars.find((a) => a.id === avatarId);
@@ -476,7 +482,8 @@ export async function keepExampleAvatar(db: Db, avatarId: string): Promise<void>
   const profileIds = [...new Set(accounts.map((a) => a.profile_id).filter((id): id is string => Boolean(id)))];
 
   await unmarkWhere("activity_log", "avatar_id", [avatarId]);
-  await unmarkWhere("weekly_sales", "avatar_id", [avatarId]);
+  const sales = await getSupabase().from("weekly_sales").delete().eq("avatar_id", avatarId).eq("is_example", true);
+  if (sales.error) throw toAppError(sales.error);
   await unmarkWhere("warmups", "account_id", accountIds);
   await unmarkWhere("accounts", "avatar_id", [avatarId]);
   await unmarkWhere("phones", "id", phoneIds);

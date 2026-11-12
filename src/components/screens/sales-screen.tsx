@@ -7,9 +7,9 @@ import { plural } from "@/lib/format";
 import {
   addWeeks,
   amountIn,
+  currentMonth,
   describeTotals,
   firstWeek,
-  monthKey,
   monthName,
   rank,
   salesOfMonth,
@@ -39,11 +39,12 @@ import { Select } from "@/components/ui/field";
 
 type Period = "12" | "26" | "52" | "all";
 
-const PERIODS: Array<{ value: Period; label: string }> = [
-  { value: "12", label: "Últimas 12 semanas" },
-  { value: "26", label: "Últimos 6 meses" },
-  { value: "52", label: "Último ano" },
-  { value: "all", label: "Desde o início" },
+// `short` é o texto do seletor (cabe em meia tela do celular); `label` é o título por extenso.
+const PERIODS: Array<{ value: Period; short: string; label: string }> = [
+  { value: "12", short: "12 semanas", label: "Últimas 12 semanas" },
+  { value: "26", short: "6 meses", label: "Últimos 6 meses" },
+  { value: "52", short: "1 ano", label: "Último ano" },
+  { value: "all", short: "Tudo", label: "Desde o início" },
 ];
 
 /** O gráfico mostra no máximo este tanto de semanas (as mais recentes). */
@@ -57,8 +58,11 @@ export function SalesScreen() {
 
   const [week, setWeek] = useState(thisWeek);
   const [period, setPeriod] = useState<Period>("12");
-  const [countryId, setCountryId] = useState("");
+  const [pickedCountry, setPickedCountry] = useState("");
   const [editingRates, setEditingRates] = useState(false);
+  // (esta tela fica guardada enquanto se usa as outras: um país apagado lá não pode continuar filtrando aqui)
+  const countryId = db.countries.some((country) => country.id === pickedCountry) ? pickedCountry : "";
+  const month = currentMonth(today);
 
   // Tudo que fica abaixo dos filtros usa o mesmo recorte: país escolhido + período.
   const view = useMemo(() => {
@@ -84,7 +88,7 @@ export function SalesScreen() {
       series: weeklySeries(inPeriod, rates, thisWeek, columns, unit),
       thisWeek: sumSales(salesOfWeek(scoped, thisWeek), rates),
       weekNote: weekDelta(salesOfWeek(scoped, thisWeek), salesOfWeek(scoped, addWeeks(thisWeek, -1)), rates),
-      month: sumSales(salesOfMonth(scoped, monthKey(today)), rates),
+      month: sumSales(salesOfMonth(scoped, month), rates),
       ranking: rank(avatars, (avatar) => byAvatar(avatar.id), rates, unit).filter((row) => row.totals.entries > 0),
       byCountry: rank(
         countries,
@@ -93,7 +97,7 @@ export function SalesScreen() {
         unit,
       ).filter((row) => row.totals.entries > 0),
     };
-  }, [db.avatars, db.countries, db.sales, rates, countryId, period, thisWeek, today]);
+  }, [db.avatars, db.countries, db.sales, rates, countryId, period, thisWeek, month]);
 
   const flagOf = (id: string) => db.countries.find((country) => country.id === id)?.flag;
   const periodLabel = PERIODS.find((item) => item.value === period)?.label ?? "";
@@ -147,14 +151,14 @@ export function SalesScreen() {
             <Select value={period} onChange={(e) => setPeriod(e.target.value as Period)} aria-label="Período" className="h-10">
               {PERIODS.map((item) => (
                 <option key={item.value} value={item.value}>
-                  {item.label}
+                  {item.short}
                 </option>
               ))}
             </Select>
           </span>
           {db.countries.length > 1 ? (
             <span className="min-w-40 flex-1 sm:max-w-60">
-              <Select value={countryId} onChange={(e) => setCountryId(e.target.value)} aria-label="País" className="h-10">
+              <Select value={countryId} onChange={(e) => setPickedCountry(e.target.value)} aria-label="País" className="h-10">
                 <option value="">Todos os países</option>
                 {db.countries.map((country) => (
                   <option key={country.id} value={country.id}>
@@ -199,7 +203,7 @@ export function SalesScreen() {
           </li>
           <li>
             <StatTile
-              label={capitalize(monthName(monthKey(today)))}
+              label={capitalize(monthName(month, today))}
               totals={view.month}
               note={view.month.entries > 0 ? plural(view.month.entries, "lançamento", "lançamentos") : "nenhum lançamento"}
             />
@@ -253,9 +257,13 @@ function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
-/** "+12% sobre a semana passada" — só quando as duas semanas dão para comparar na mesma moeda. */
+/**
+ * "+12% sobre a semana passada" — só quando as duas semanas dão para comparar na mesma moeda.
+ * Semana ainda sem lançamento não é "−100%": é só uma semana que falta lançar.
+ */
 function weekDelta(current: WeeklySale[], previous: WeeklySale[], rates: Rates): string | null {
-  if (previous.length === 0) return current.length === 0 ? "nenhum lançamento" : null;
+  if (current.length === 0) return "nenhum lançamento";
+  if (previous.length === 0) return null;
   const unit = unitFor(sumSales([...current, ...previous], rates));
   if (unit.partial) return null;
   const before = amountIn(sumSales(previous, rates), unit);

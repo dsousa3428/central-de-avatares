@@ -19,7 +19,12 @@ async function db(sql, expected, message) {
 const monday = (weeksAgo = 0) => `(date_trunc('week', current_date)::date - ${7 * weeksAgo})`;
 const saleOf = (avatar, weeksAgo, column) =>
   `select coalesce(${column}::text, '') from public.weekly_sales s join public.avatars a on a.id = s.avatar_id where a.name = '${avatar.replace(/'/g, "''")}' and s.week_start = ${monday(weeksAgo)}`;
-const month = new Intl.DateTimeFormat("pt-BR", { month: "long", timeZone: "UTC" }).format(new Date());
+// O mês "em andamento" é o da semana atual; e o mês de uma semana é o da quinta-feira dela.
+const now = new Date();
+const thursday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - ((now.getUTCDay() + 6) % 7) + 3));
+const monthOnly = new Intl.DateTimeFormat("pt-BR", { month: "long", timeZone: "UTC" }).format(thursday);
+const month = thursday.getUTCFullYear() === now.getUTCFullYear() ? monthOnly : `${monthOnly} de ${thursday.getUTCFullYear()}`;
+const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 (async () => {
   resetData();
@@ -53,6 +58,8 @@ const month = new Intl.DateTimeFormat("pt-BR", { month: "long", timeZone: "UTC" 
   await tile("Últimas 12 semanas").getByText("€ 1.431,00").waitFor();
   await tile("Últimas 12 semanas").getByText("53 vendas").waitFor();
   ok("a tela Vendas soma as 12 últimas semanas (€ 1.431,00, 53 vendas)");
+  await tile("Esta semana").getByText("nenhum lançamento").waitFor();
+  assert(!(await page.locator("main").innerText()).includes("100%"), "semana ainda sem lançamento diz “nenhum lançamento” (e não “−100%”)");
   await overflow("Vendas");
   await shot("d10-vendas");
 
@@ -82,6 +89,13 @@ const month = new Intl.DateTimeFormat("pt-BR", { month: "long", timeZone: "UTC" 
   await page.keyboard.press("Enter");
   await page.waitForTimeout(400);
   assert((await amountOf("Fra' Salvio").inputValue()) === "400,00" && psql(saleOf("Fra' Salvio", 0, "amount")) === "400.00", "valor inválido ou campo vazio não mexem no que está lançado");
+
+  // o campo comporta um valor de cinco dígitos inteiro (o símbolo da moeda fica ao lado, não por cima)
+  await amountOf("Fra' Salvio").fill("12.345,67");
+  assert(await amountOf("Fra' Salvio").evaluate((input) => input.scrollWidth <= input.clientWidth), "“12.345,67” cabe inteiro no campo");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+  assert((await amountOf("Fra' Salvio").inputValue()) === "400,00" && psql(saleOf("Fra' Salvio", 0, "amount")) === "400.00", "Esc desiste do que foi digitado");
 
   // semana anterior: um lançamento de exemplo que você corrige passa a ser seu
   await page.getByRole("button", { name: "Semana anterior" }).click();
@@ -147,6 +161,11 @@ const month = new Intl.DateTimeFormat("pt-BR", { month: "long", timeZone: "UTC" 
   await toast("Cotações salvas");
   await noDialog();
   await db("select brl_rates::text from public.settings", '{"EUR": 6.1}', "a cotação digitada fica salva");
+  await db(
+    "select count(*)::text || '|' || count(*) filter (where brl_rate = 6.1)::text from public.weekly_sales where currency = 'EUR'",
+    `${psql("select count(*) from public.weekly_sales where currency = 'EUR'")}|${psql("select count(*) from public.weekly_sales where currency = 'EUR'")}`,
+    "as vendas lançadas antes de existir cotação ficam com a primeira digitada (6,10)",
+  );
   await tile("Esta semana").getByText("≈ R$ 2.440,00").waitFor();
   ok("os totais passam a mostrar o equivalente em reais (€ 400 × 6,10 = R$ 2.440,00)");
 
@@ -170,6 +189,7 @@ const month = new Intl.DateTimeFormat("pt-BR", { month: "long", timeZone: "UTC" 
   await tile("Esta semana").getByText("R$ 2.940,00").waitFor();
   await tile("Esta semana").getByText("€ 400,00 + US$ 100,00").waitFor();
   ok("com as duas cotações, a semana soma R$ 2.940,00 (€ 400,00 + US$ 100,00)");
+  await db(saleOf("Grandpa Joe", 0, "brl_rate"), "5.000000", "a venda em dólares lançada sem cotação fica com a primeira digitada (5,00)");
   // um lançamento novo guarda a cotação do dia; mudar a cotação depois não mexe nele
   await page.getByRole("button", { name: "Semana anterior" }).click();
   await amountOf("Grandpa Joe").fill("50");
@@ -177,13 +197,39 @@ const month = new Intl.DateTimeFormat("pt-BR", { month: "long", timeZone: "UTC" 
   await db(saleOf("Grandpa Joe", 1, "amount || '|' || brl_rate"), "50.00|5.000000", "o lançamento novo guarda a cotação em vigor (5,00)");
   await page.getByRole("button", { name: "Próxima semana" }).click();
   await page.getByRole("button", { name: "Cotações" }).click();
+  assert((await rate("USD").inputValue()) === "5,00" && (await rate("EUR").inputValue()) === "6,10", "a janela abre com as cotações salvas (5,00 e 6,10)");
+  // numa cotação, um ponto sozinho é a vírgula decimal: "5.432" são R$ 5,432 — nunca cinco mil
+  await rate("USD").fill("5.432");
+  await dialog().getByText("100 USD = R$ 543,20").waitFor();
+  ok("“5.432” é lido como 5,432 (100 USD = R$ 543,20)");
   await rate("USD").fill("6");
   await save();
   await toast("Cotações salvas");
   await noDialog();
-  // esta semana (lançada sem cotação) usa a atual: 400 × 6,10 + 100 × 6 = 3.040
+  await db("select brl_rates->>'USD' from public.settings", "6", "(cotação do dólar atualizada para 6,00)");
+  await page.waitForTimeout(500);
+  // atualizar a cotação não mexe no que já foi lançado: 400 × 6,10 + 100 × 5,00 continua R$ 2.940,00
+  await tile("Esta semana").getByText("R$ 2.940,00").waitFor();
+  assert(psql(saleOf("Grandpa Joe", 0, "brl_rate")) === "5.000000", "atualizar a cotação não muda as vendas já lançadas");
+
+  // a cotação de uma venda só se corrige nos detalhes dela
+  await page.getByRole("button", { name: "Detalhes da venda de Grandpa Joe" }).click();
+  const saleRate = field("Cotação: 1 USD em reais");
+  assert((await saleRate.inputValue()) === "5,00", "os detalhes mostram a cotação guardada na venda (5,00)");
+  await dialog().getByText("≈ R$ 500,00 nesta semana").waitFor();
+  await saleRate.fill("seis");
+  await save();
+  await dialog().getByRole("alert").filter({ hasText: "Não entendi a cotação" }).waitFor();
+  await saleRate.fill("6");
+  await dialog().getByText("≈ R$ 600,00 nesta semana").waitFor();
+  await shot("d12b-cotacao-da-venda");
+  await save();
+  await toast("Venda atualizada");
+  await noDialog();
+  await db(saleOf("Grandpa Joe", 0, "brl_rate"), "6.000000", "a cotação digitada nos detalhes fica guardada na venda");
+  // 400 × 6,10 + 100 × 6,00 = 3.040
   await tile("Esta semana").getByText("R$ 3.040,00").waitFor();
-  ok("lançamento feito sem cotação acompanha a cotação atual (US$ 100 → R$ 600)");
+  ok("o total da semana acompanha (R$ 3.040,00)");
 
   // ---------------------------------------------------------------
   section("Gráfico por semana, tabela e filtros");
@@ -198,6 +244,38 @@ const month = new Intl.DateTimeFormat("pt-BR", { month: "long", timeZone: "UTC" 
   await chart.getByText("R$ 1.775,00").waitFor();
   await chart.getByText(/Semana passada/).waitFor();
   ok("tocar numa coluna mostra o valor e a semana dela");
+  // com o dedo: a coluna escolhida é a que está debaixo dele, e arrastar de lado percorre as semanas
+  const touch = (type, column, y = 0.5) =>
+    bars.first().evaluate(
+      (button, [type, column, y]) => {
+        const plot = button.parentElement.parentElement;
+        const box = plot.getBoundingClientRect();
+        const target = type === "pointerdown" ? button : plot;
+        target.dispatchEvent(
+          new PointerEvent(type, {
+            bubbles: true,
+            pointerType: "touch",
+            pointerId: 7,
+            clientX: box.left + ((column + 0.5) / 12) * box.width,
+            clientY: box.top + y * box.height,
+          }),
+        );
+      },
+      [type, column, y],
+    );
+  await touch("pointerdown", 3);
+  await chart.getByText(/Há 8 semanas/).waitFor();
+  await touch("pointermove", 6);
+  await chart.getByText(/Há 5 semanas/).waitFor();
+  await touch("pointermove", 11);
+  await chart.getByText(/Esta semana/).waitFor();
+  await touch("pointermove", 10);
+  await touch("pointerup", 10);
+  await chart.getByText(/Semana passada/).waitFor();
+  ok("arrastar o dedo sobre o gráfico percorre as semanas, e a escolhida fica ao soltar");
+  await page.getByRole("heading", { name: "Vendas por semana" }).click();
+  await chart.getByText(/Esta semana/).waitFor();
+  ok("um toque fora do gráfico volta para a semana mais recente");
   const heights = await bars.evaluateAll((list) => list.map((button) => Math.round(button.firstElementChild.getBoundingClientRect().height)));
   assert(heights[11] === Math.max(...heights) && heights[9] === 0, "a altura das colunas acompanha o valor (a semana apagada fica vazia)");
   await shot("d13-grafico");
@@ -261,6 +339,28 @@ const month = new Intl.DateTimeFormat("pt-BR", { month: "long", timeZone: "UTC" 
   assert((await field("Valor vendido na semana").inputValue()) === "400,00", "tocar num lançamento abre para corrigir");
   await dialog().getByRole("button", { name: "Cancelar" }).click();
   await noDialog();
+  // quem digitou na semana errada só troca a semana: o que foi digitado vai junto
+  await page.getByRole("button", { name: "Lançar venda" }).click();
+  for (let i = 0; i < 9; i++) await dialog().getByRole("button", { name: "Semana anterior" }).click();
+  await dialog().getByText("Há 9 semanas", { exact: true }).waitFor();
+  await field("Valor vendido na semana").fill("77");
+  await field("Observação").fill("semana errada");
+  await dialog().getByRole("button", { name: "Semana anterior" }).click();
+  await dialog().getByText("Há 10 semanas", { exact: true }).waitFor();
+  assert(
+    (await field("Valor vendido na semana").inputValue()) === "77" && (await field("Observação").inputValue()) === "semana errada",
+    "trocar para outra semana em branco mantém o que foi digitado",
+  );
+  await dialog().getByRole("button", { name: "Próxima semana" }).click();
+  await dialog().getByRole("button", { name: "Próxima semana" }).click();
+  await dialog().getByText("Há 8 semanas", { exact: true }).waitFor();
+  assert((await field("Valor vendido na semana").inputValue()) === "108,00", "numa semana já lançada, a janela mostra o que está lançado nela");
+  await dialog().getByRole("button", { name: "Semana anterior" }).click();
+  await dialog().getByText("Há 9 semanas", { exact: true }).waitFor();
+  assert((await field("Valor vendido na semana").inputValue()) === "77", "e, voltando para a semana em branco, o que foi digitado continua lá");
+  await dialog().getByRole("button", { name: "Cancelar" }).click();
+  await noDialog();
+  assert(psql(`select count(*) from public.weekly_sales where week_start <= ${monday(9)}`) === "0", "(cancelar não lança nada)");
   await overflow("aba Vendas do avatar");
   await shot("d15-avatar-vendas");
 
@@ -269,7 +369,7 @@ const month = new Intl.DateTimeFormat("pt-BR", { month: "long", timeZone: "UTC" 
   await page.getByRole("link", { name: "Países" }).click();
   await page.getByRole("heading", { name: "Países", exact: true }).waitFor();
   const monthTotal = psql(
-    "select sum(amount)::text from public.weekly_sales s join public.avatars a on a.id = s.avatar_id where a.name = 'Fra'' Salvio' and to_char(s.week_start, 'YYYY-MM') = to_char(current_date, 'YYYY-MM')",
+    "select sum(amount)::text from public.weekly_sales s join public.avatars a on a.id = s.avatar_id where a.name = 'Fra'' Salvio' and to_char(s.week_start + 3, 'YYYY-MM') = to_char(date_trunc('week', current_date)::date + 3, 'YYYY-MM')",
   );
   const card = page.getByRole("link", { name: /Fra' Salvio/ });
   await card.getByText(`Vendas em ${month}`).waitFor();
@@ -297,6 +397,13 @@ const month = new Intl.DateTimeFormat("pt-BR", { month: "long", timeZone: "UTC" 
   await toast(`${count} linhas copiadas`);
   const copied = (await clipboard()).split("\n").map((line) => line.split("\t"));
   assert(copied[0][valor] === "Valor" && copied[1][valor] === "410,10" && copied[1][header.indexOf("Em reais")] === "2501,61", "copiar leva os valores como números (410,10 e 2501,61)");
+  // corrigir qualquer campo de um lançamento de exemplo faz dele um dado seu (também pela planilha)
+  const exampleRow = page.locator("tbody tr").nth(5); // Fra' Salvio, há 3 semanas (ainda de exemplo)
+  assert(psql(saleOf("Fra' Salvio", 3, "s.sales_count || '|' || s.is_example")) === "11|true", "(a linha de 3 semanas atrás é um exemplo com 11 vendas)");
+  await exampleRow.locator("td").nth(header.indexOf("Qtd. de vendas")).getByRole("button").click();
+  await exampleRow.getByLabel("Qtd. de vendas").fill("10");
+  await page.keyboard.press("Enter");
+  await db(saleOf("Fra' Salvio", 3, "s.sales_count || '|' || s.is_example"), "10|false", "corrigir a quantidade de um exemplo na planilha faz dele um dado seu");
   await page.getByLabel("Filtrar por país").selectOption({ label: "Estados Unidos" });
   assert((await page.locator("tbody tr").count()) === 2, "filtro por país");
 
@@ -317,6 +424,87 @@ const month = new Intl.DateTimeFormat("pt-BR", { month: "long", timeZone: "UTC" 
   ok("a tela se atualiza e mostra o valor que já estava lançado");
 
   // ---------------------------------------------------------------
+  section("Digitando rápido: valor, Enter, valor, Enter");
+  for (let i = 0; i < 6; i++) await page.getByRole("button", { name: "Semana anterior" }).click();
+  await page.getByText("Há 9 semanas", { exact: true }).waitFor();
+  assert((await amountOf("Fra' Salvio").inputValue()) === "" && (await amountOf("Grandpa Joe").inputValue()) === "", "(há 9 semanas, nenhum dos dois avatares tem lançamento)");
+  // (espera sumir o aviso do teste anterior, para conferir que este trecho não gera aviso nenhum)
+  await page.waitForFunction(() => !document.querySelector(".cda-toast"), null, { timeout: 15000 });
+  // as gravações demoram meio segundo: quem digita rápido não espera por elas
+  const slow = async (route) => {
+    if (["POST", "PATCH"].includes(route.request().method())) await pause(500);
+    await route.continue();
+  };
+  await page.route("**/rest/v1/weekly_sales*", slow);
+  await amountOf("Fra' Salvio").click();
+  await page.keyboard.type("111");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("222");
+  await page.keyboard.press("Enter");
+  await db(saleOf("Fra' Salvio", 9, "amount"), "111.00", "o primeiro valor vai para o primeiro avatar");
+  await db(saleOf("Grandpa Joe", 9, "amount"), "222.00", "e o segundo, digitado sem esperar, vai para o avatar de baixo");
+  await page.waitForFunction(() => !document.body.innerText.includes("salvando"));
+  assert((await amountOf("Fra' Salvio").inputValue()) === "111,00" && (await amountOf("Grandpa Joe").inputValue()) === "222,00", "os dois campos mostram o que foi lançado");
+
+  // corrigir o mesmo campo antes de a primeira gravação terminar
+  await page.getByRole("button", { name: "Semana anterior" }).click();
+  await page.getByText("Há 10 semanas", { exact: true }).waitFor();
+  await amountOf("Fra' Salvio").click();
+  await page.keyboard.type("10");
+  await page.keyboard.press("Enter");
+  await amountOf("Fra' Salvio").click();
+  await page.keyboard.type("20");
+  await page.keyboard.press("Enter");
+  await db(saleOf("Fra' Salvio", 10, "amount"), "20.00", "vale o último valor digitado (as gravações entram em fila)");
+  await page.waitForFunction(() => !document.body.innerText.includes("salvando"));
+  assert(psql(`select count(*) from public.weekly_sales s join public.avatars a on a.id = s.avatar_id where a.name = 'Fra'' Salvio' and s.week_start = ${monday(10)}`) === "1", "um lançamento só, sem erro de duplicado");
+  assert((await amountOf("Fra' Salvio").inputValue()) === "20,00", "o campo mostra o último valor");
+  assert((await page.locator(".cda-toast").count()) === 0, "nenhum aviso de erro no caminho");
+
+  // abrir os detalhes logo depois de digitar: a janela espera o lançamento e abre com ele
+  await page.getByRole("button", { name: "Semana anterior" }).click();
+  await page.getByText("Há 11 semanas", { exact: true }).waitFor();
+  await amountOf("Grandpa Joe").fill("55");
+  await page.getByRole("button", { name: "Detalhes da venda de Grandpa Joe" }).click();
+  await dialog().getByText("Venda da semana").waitFor();
+  assert((await field("Valor vendido na semana").inputValue()) === "55,00", "os detalhes abrem já com o valor que acabou de ser digitado");
+  await field("Quantidade de vendas").fill("3");
+  await save();
+  await toast("Venda atualizada");
+  await noDialog();
+  await db(saleOf("Grandpa Joe", 11, "s.amount || '|' || s.sales_count"), "55.00|3", "e salvar os detalhes não desfaz o valor");
+  await page.unroute("**/rest/v1/weekly_sales*", slow);
+  // valor que não dá para entender: avisa uma vez, marca o campo e não abre os detalhes
+  await amountOf("Fra' Salvio").fill("1x");
+  await page.getByRole("button", { name: "Detalhes da venda de Fra' Salvio" }).click();
+  await toast("Não entendi o valor");
+  await page.waitForTimeout(400);
+  assert((await page.locator("dialog[open]").count()) === 0, "com um valor inválido no campo, os detalhes não abrem");
+  assert((await amountOf("Fra' Salvio").getAttribute("aria-invalid")) === "true", "o campo fica marcado");
+  await amountOf("Fra' Salvio").click();
+  await page.keyboard.press("Escape");
+
+  // ---------------------------------------------------------------
+  section("Cotação digitada errada: recalcular as vendas já lançadas");
+  await page.getByRole("button", { name: "Cotações" }).click();
+  await rate("USD").fill("5,5");
+  await dialog().getByText("Usar também nas vendas já lançadas").click();
+  await shot("d16-cotacoes-recalcular");
+  await save();
+  await toast("Cotações salvas");
+  await noDialog();
+  await db(
+    "select count(*)::text || '|' || count(*) filter (where brl_rate = 5.5)::text from public.weekly_sales where currency = 'USD'",
+    `${psql("select count(*) from public.weekly_sales where currency = 'USD'")}|${psql("select count(*) from public.weekly_sales where currency = 'USD'")}`,
+    "marcando “usar também nas vendas já lançadas”, todas as vendas em dólar passam a 5,50",
+  );
+  assert(psql("select count(*) from public.weekly_sales where currency = 'EUR' and brl_rate is distinct from 6.1") === "0", "as vendas em euro (cotação não alterada) continuam como estavam");
+  // depois de recalcular, as linhas mudaram de versão no banco: a tela precisa estar em dia para editar
+  await amountOf("Grandpa Joe").fill("56");
+  await page.keyboard.press("Enter");
+  await db(saleOf("Grandpa Joe", 11, "amount || '|' || brl_rate"), "56.00|5.500000", "editar uma venda logo depois de recalcular funciona (sem “alterado em outro aparelho”)");
+
+  // ---------------------------------------------------------------
   section("Apagar exemplos: as vendas de exemplo saem, as suas ficam");
   const mine = psql("select count(*) from public.weekly_sales where not is_example");
   await more("Configurações");
@@ -326,6 +514,27 @@ const month = new Intl.DateTimeFormat("pt-BR", { month: "long", timeZone: "UTC" 
   await toast("Exemplos apagados");
   await db("select count(*)::text || '|' || count(*) filter (where is_example)::text from public.weekly_sales", `${mine}|0`, "só as vendas de exemplo são apagadas");
   assert(psql("select is_example::text from public.avatars where name = 'Fra'' Salvio'") === "false", "o avatar com vendas suas fica (deixa de ser exemplo)");
+
+  // ---------------------------------------------------------------
+  section("“Ficar com este avatar”: as vendas inventadas não viram dados seus");
+  resetData(); // banco limpo: a próxima carga recria os exemplos
+  await page.reload();
+  await page.getByRole("heading", { name: "Configurações" }).waitFor({ timeout: 30000 });
+  await openSales();
+  await amountOf("Fra' Salvio").fill("90");
+  await page.keyboard.press("Enter");
+  await db(saleOf("Fra' Salvio", 0, "amount"), "90.00", "(uma venda de verdade lançada nesta semana)");
+  await page.getByRole("link", { name: "Países" }).click();
+  await page.getByRole("heading", { name: "Países", exact: true }).waitFor();
+  await page.getByRole("link", { name: /Fra' Salvio/ }).click();
+  await page.getByRole("heading", { name: "Fra' Salvio" }).waitFor();
+  await page.getByRole("button", { name: "Ficar com este avatar" }).click();
+  await dialog().getByText(/8 lançamentos inventados/).waitFor();
+  ok("a confirmação avisa que as 8 vendas de exemplo serão apagadas");
+  await dialog().getByRole("button", { name: "Ficar com ele" }).click();
+  await toast("Fra' Salvio agora é seu");
+  await db("select count(*)::text || '|' || coalesce(sum(amount), 0)::text || '|' || count(*) filter (where is_example)::text from public.weekly_sales", "1|90.00|0", "as vendas inventadas são apagadas; a que você lançou fica");
+  assert(psql("select is_example::text from public.avatars where name = 'Fra'' Salvio'") === "false", "o avatar passa a ser seu");
 
   resetData();
   // (o 409 é esperado: é o banco recusando o lançamento repetido no teste dos dois aparelhos)

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Sparkles } from "lucide-react";
 import { keepExampleAvatar, keepExampleCountry } from "@/lib/examples";
+import { plural } from "@/lib/format";
 import { refresh, useStore } from "@/lib/store";
 import type { Avatar, Country } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,8 @@ export function KeepExample({ avatar, country }: KeepExampleProps) {
   const [busy, setBusy] = useState(false);
   const what = avatar ? "avatar" : "país";
   const name = avatar ? avatar.name : country.name;
+  // as vendas de exemplo (valores inventados) não viram dados do dono: são apagadas ao ficar com o avatar
+  const exampleSales = avatar ? db.sales.filter((sale) => sale.avatar_id === avatar.id && sale.is_example).length : 0;
 
   async function keep() {
     const ok = await confirm({
@@ -34,7 +37,10 @@ export function KeepExample({ avatar, country }: KeepExampleProps) {
             os celulares e perfis que ele usa.
           </p>
           <p className="mt-2">
-            Nada é alterado nem apagado. Ele só não será mais removido quando você apagar os exemplos.
+            Ele não será mais removido quando você apagar os exemplos.{" "}
+            {exampleSales > 0
+              ? `Só as vendas de exemplo dele (${plural(exampleSales, "lançamento inventado", "lançamentos inventados")}) são apagadas agora, para não entrarem nos seus totais.`
+              : "Nada é alterado nem apagado."}
           </p>
         </>
       ) : (

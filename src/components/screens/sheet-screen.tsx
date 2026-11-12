@@ -7,7 +7,7 @@ import { changeAccountStatus } from "@/lib/account-actions";
 import { formatDate, isValidISODate, todayISO } from "@/lib/dates";
 import { clean, formatMoney, formatNumber, normalizeHandle, parseCount, parseDecimal, prettyUrl } from "@/lib/format";
 import { cleanRates, inBRL, weekLabel } from "@/lib/sales";
-import { saveSale } from "@/lib/sales-actions";
+import { patchSale } from "@/lib/sales-actions";
 import {
   accountsOf,
   currentAccount,
@@ -501,8 +501,7 @@ function SalesSheet({ db }: { db: Db }) {
           save: async (r, value) => {
             const amount = parseDecimal(value);
             if (amount === null || amount < 0) invalid("Não entendi o valor. Exemplos: 150 ou 1.234,50.");
-            if (!r.avatar) invalid("Este lançamento está sem avatar.");
-            await saveSale(r.avatar, r.sale.week_start, { amount, currency: r.sale.currency });
+            await patchSale(r.sale, { amount });
           },
         },
       },
@@ -520,7 +519,8 @@ function SalesSheet({ db }: { db: Db }) {
           save: async (r, value) => {
             const count = value.trim() ? parseCount(value) : null;
             if (value.trim() && count === null) invalid("Não entendi a quantidade. Exemplo: 12.");
-            await updateRow("weekly_sales", r.sale.id, { sales_count: count }, quick);
+            // (patchSale: um lançamento de exemplo que você corrige deixa de ser exemplo)
+            await patchSale(r.sale, { sales_count: count }, quick);
           },
         },
       },
@@ -545,7 +545,7 @@ function SalesSheet({ db }: { db: Db }) {
         edit: {
           type: "text",
           value: (r) => r.sale.notes ?? "",
-          save: (r, value) => updateRow("weekly_sales", r.sale.id, { notes: clean(value) }, quick),
+          save: (r, value) => patchSale(r.sale, { notes: clean(value) }, quick),
         },
       },
     ],

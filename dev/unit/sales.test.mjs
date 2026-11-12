@@ -10,11 +10,13 @@ import {
   currencySymbol,
   defaultCurrency,
   describeTotals,
+  currentMonth,
   formatAmount,
+  formatRate,
   firstWeek,
   inBRL,
-  monthKey,
   monthName,
+  monthOfWeek,
   niceScale,
   NO_SALES,
   rank,
@@ -73,10 +75,24 @@ test("nomes das semanas e dos meses", () => {
   assert.equal(weekTitle("2026-10-26", "2026-11-12"), "Semana de 26 de out a 1 de nov");
   assert.equal(weekTitle("2026-11-16", "2026-11-12"), "Semana de 16 a 22 de nov");
   assert.equal(weekTick("2026-11-09"), "9/11");
-  assert.equal(monthKey("2026-11-09"), "2026-11");
   assert.equal(monthName("2026-11"), "novembro");
   assert.equal(monthName("2026-03", "2026-11-12"), "março");
   assert.equal(monthName("2025-12", "2026-11-12"), "dezembro de 2025");
+});
+
+test("o mês de uma semana é o da maior parte dos dias dela (a quinta-feira)", () => {
+  assert.equal(monthOfWeek("2026-11-09"), "2026-11"); // 9 a 15 de nov
+  assert.equal(monthOfWeek("2026-10-26"), "2026-10"); // 26 de out a 1 de nov: seis dias em outubro
+  assert.equal(monthOfWeek("2026-11-30"), "2026-12"); // 30 de nov a 6 de dez: seis dias em dezembro
+  assert.equal(monthOfWeek("2026-06-29"), "2026-07"); // 29 de jun a 5 de jul: quinta-feira, 2 de julho
+  assert.equal(monthOfWeek("2026-12-28"), "2026-12"); // 28 de dez a 3 de jan: quinta-feira, 31 de dezembro
+  assert.equal(monthOfWeek("2025-12-29"), "2026-01"); // 29 de dez a 4 de jan: quinta-feira, 1º de janeiro
+  // o "mês em andamento" é o da semana atual: o lançamento desta semana sempre entra nele
+  assert.equal(currentMonth("2026-11-12"), "2026-11");
+  assert.equal(currentMonth("2026-12-01"), "2026-12"); // terça, na semana de 30 de nov a 6 de dez
+  assert.equal(currentMonth("2026-11-30"), "2026-12"); // a segunda-feira dessa mesma semana já conta para dezembro
+  assert.equal(currentMonth("2026-11-01"), "2026-10"); // domingo, ainda na semana de 26 de out a 1 de nov
+  assert.equal(currentMonth("2027-01-02"), "2026-12"); // sábado, na semana de 28 de dez a 3 de jan
 });
 
 test("cotações: só moedas válidas com número positivo", () => {
@@ -111,6 +127,13 @@ test("somas: por moeda, em reais, e o que ficou sem cotação", () => {
   assert.deepEqual(totals.byCurrency, { EUR: 150.5, BRL: 200, USD: 30, GBP: 0 });
   assert.equal(totals.brl, 100 * 6 + 50.5 * 5 + 200);
   assert.deepEqual(totals.missing, ["USD"]);
+  assert.deepEqual(totals.unconverted, { USD: 30 });
+  // uma moeda com parte convertida (cotação guardada no lançamento) e parte sem cotação nenhuma
+  const partly = sumSales([sale("2026-11-02", 40, "USD", { brl_rate: 5 }), sale("2026-11-09", 60, "USD")], {});
+  assert.deepEqual(partly.byCurrency, { USD: 100 });
+  assert.equal(partly.brl, 200);
+  assert.deepEqual(partly.unconverted, { USD: 60 });
+  assert.deepEqual(partly.missing, ["USD"]);
   assert.equal(totals.entries, 5);
   assert.equal(totals.units, 7);
   assert.deepEqual(currenciesOf(totals), ["BRL", "EUR", "USD"]);
@@ -149,9 +172,13 @@ test("moeda de comparação: a própria moeda quando só há uma, reais quando m
 test("filtros por semana, mês e período", () => {
   const list = [sale("2026-10-26", 1), sale("2026-11-02", 2), sale("2026-11-09", 3), sale("2025-11-10", 4)];
   assert.deepEqual(salesOfWeek(list, "2026-11-02").map((s) => s.amount), [2]);
-  // a semana de 26/10 a 1/11 pertence a outubro (o mês da segunda-feira)
+  // a semana de 26/10 a 1/11 pertence a outubro (seis dos sete dias)
   assert.deepEqual(salesOfMonth(list, "2026-10").map((s) => s.amount), [1]);
   assert.deepEqual(salesOfMonth(list, "2026-11").map((s) => s.amount), [2, 3]);
+  // a semana de 30/11 a 6/12 pertence a dezembro, embora comece em novembro
+  const turn = [sale("2026-11-23", 7), sale("2026-11-30", 8)];
+  assert.deepEqual(salesOfMonth(turn, "2026-11").map((s) => s.amount), [7]);
+  assert.deepEqual(salesOfMonth(turn, "2026-12").map((s) => s.amount), [8]);
   assert.deepEqual(salesSince(list, "2026-11-02").map((s) => s.amount), [2, 3]);
   assert.equal(salesSince(list, null).length, 4);
   assert.equal(firstWeek(list), "2025-11-10");
@@ -227,6 +254,11 @@ test("como uma soma aparece na tela", () => {
   assert.deepEqual(text(sumSales(mixed, { EUR: 6, USD: 5 })), ["R$ 7.907,00", "€ 1.234,50 + US$ 100,00"]);
   assert.deepEqual(text(sumSales(mixed, { EUR: 6 })), ["R$ 7.407,00 + US$ 100,00", "falta a cotação de USD"]);
   assert.deepEqual(text(sumSales(mixed, {})), ["€ 1.234,50 + US$ 100,00", "falta a cotação de EUR, USD"]);
+  // O que já entrou no total em reais não é contado de novo ao lado: dos US$ 100, 40 têm
+  // cotação guardada (R$ 200) e só os outros 60 aparecem como "sem cotação".
+  const partly = [sale("2026-11-02", 40, "USD", { brl_rate: 5 }), sale("2026-11-09", 60, "USD")];
+  assert.deepEqual(text(sumSales(partly, {})), ["US$ 100,00", "≈ R$ 200,00 + US$ 60,00 sem cotação"]);
+  assert.deepEqual(text(sumSales([...eur, ...partly], { EUR: 6 })), ["R$ 7.607,00 + US$ 60,00", "falta a cotação de USD"]);
 });
 
 test("moeda sugerida, símbolo e valor para o campo", () => {
@@ -241,6 +273,11 @@ test("moeda sugerida, símbolo e valor para o campo", () => {
   assert.equal(currencySymbol("???"), "???");
   assert.equal(formatAmount(1234.5), "1.234,50");
   assert.equal(formatAmount(0), "0,00");
+  // cotação para o campo: pelo menos duas casas, sem separador de milhar
+  assert.equal(formatRate(6.1), "6,10");
+  assert.equal(formatRate(5), "5,00");
+  assert.equal(formatRate(5.4321), "5,4321");
+  assert.equal(formatRate(1234.5), "1234,50");
   assert.equal(weekAgo("2026-11-09", "2026-11-12"), "Esta semana");
   assert.equal(weekAgo("2026-11-02", "2026-11-12"), "Semana passada");
   assert.equal(weekAgo("2026-10-19", "2026-11-12"), "Há 3 semanas");

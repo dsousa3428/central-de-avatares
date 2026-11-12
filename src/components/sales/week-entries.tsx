@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { Check, Ellipsis, TrendingUp } from "lucide-react";
 import { AppError } from "@/lib/errors";
-import { formatMoney, parseDecimal, plural } from "@/lib/format";
+import { cn, formatMoney, parseDecimal, plural } from "@/lib/format";
 import {
   currencySymbol,
   defaultCurrency,
@@ -16,7 +16,7 @@ import {
   type Rates,
 } from "@/lib/sales";
 import { saleOf, saveSale } from "@/lib/sales-actions";
-import { useStore } from "@/lib/store";
+import { getStore, useStore } from "@/lib/store";
 import type { Avatar, Country, WeeklySale } from "@/lib/types";
 import { AvatarPhoto } from "@/components/ui/avatar-photo";
 import { ExampleBadge } from "@/components/ui/badge";
@@ -35,7 +35,8 @@ interface WeekEntriesProps {
 /**
  * Lançamento rápido: uma linha por avatar com um campo para o valor da semana.
  * Digitou, apertou Enter (ou saiu do campo), está lançado — e o Enter já leva
- * para o avatar de baixo.
+ * para o avatar de baixo, sem esperar a gravação (dá para digitar tudo em
+ * sequência: valor, Enter, valor, Enter…).
  */
 export function WeekEntries({ week }: WeekEntriesProps) {
   const db = useStore();
@@ -112,6 +113,16 @@ export function WeekEntries({ week }: WeekEntriesProps) {
   );
 }
 
+const MAX_AMOUNT = 9_999_999_999;
+
+/** O que está escrito no campo: nada, um valor, ou algo que não dá para entender. */
+function readAmount(text: string): number | "empty" | "invalid" {
+  const raw = text.trim();
+  if (raw === "") return "empty";
+  const amount = parseDecimal(raw);
+  return amount === null || amount < 0 || amount > MAX_AMOUNT ? "invalid" : amount;
+}
+
 interface EntryRowProps {
   avatar: Avatar;
   country: Country | undefined;
@@ -127,11 +138,20 @@ function EntryRow({ avatar, country, week, sale, currency, rates, onDetails }: E
   const toast = useToast();
   // null = mostrando o valor que está salvo; texto = o que está sendo digitado
   const [draft, setDraft] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const busy = useRef(false);
+  // quantas gravações desta linha ainda não terminaram
+  const [saving, setSaving] = useState(0);
+  const [invalid, setInvalid] = useState(false);
+  const [opening, setOpening] = useState(false);
+  // O que está digitado, para uma gravação que termina mais tarde saber se o campo mudou nesse meio-tempo.
+  const typed = useRef<string | null>(null);
+  // A última gravação pedida que ainda não terminou: o texto que ela leva e como ela vai acabar.
+  const last = useRef<{ text: string; done: Promise<boolean> } | null>(null);
+  // O texto que já foi recusado com um aviso (para não repetir o mesmo aviso).
+  const refused = useRef<string | null>(null);
 
   const code = sale?.currency ?? currency;
   const text = draft ?? (sale ? formatAmount(Number(sale.amount)) : "");
+  const busy = saving > 0;
   const converted = sale && code !== "BRL" ? inBRL(sale, rates) : null;
   const note = sale
     ? [
@@ -142,83 +162,135 @@ function EntryRow({ avatar, country, week, sale, currency, rates, onDetails }: E
         .join(" · ") || "lançado"
     : "sem lançamento";
 
-  async function commit(): Promise<boolean> {
-    if (draft === null || busy.current) return true;
-    const raw = draft.trim();
-    if (raw === "") {
-      setDraft(null); // campo vazio: volta o valor salvo (para apagar um lançamento, use os detalhes)
-      return true;
+  function edit(value: string | null) {
+    typed.current = value;
+    refused.current = null;
+    setDraft(value);
+    setInvalid(false);
+  }
+
+  /**
+   * Lança o que está no campo, sem esperar a gravação anterior: as gravações da
+   * mesma semana entram em fila (`saveSale`), e o campo só volta a mostrar o valor
+   * salvo se ninguém digitou outra coisa enquanto isso.
+   * Devolve false se, no fim, algo ficou sem lançar.
+   */
+  function commit(): Promise<boolean> {
+    const value = typed.current;
+    const before = last.current?.done ?? Promise.resolve(true);
+    if (value === null) return before;
+    if (last.current?.text === value) return last.current.done; // este mesmo texto já está sendo gravado
+    const amount = readAmount(value);
+    if (amount === "empty") {
+      edit(null); // campo vazio: volta o valor salvo (para apagar um lançamento, use os detalhes)
+      return before;
     }
-    const amount = parseDecimal(raw);
-    if (amount === null || amount < 0 || amount > 9_999_999_999) {
-      toast.error("Não entendi o valor. Exemplos: 150 ou 1.234,50.");
-      return false;
+    if (amount === "invalid") {
+      if (refused.current !== value) toast.error("Não entendi o valor. Exemplos: 150 ou 1.234,50.");
+      refused.current = value;
+      setInvalid(true);
+      return Promise.resolve(false);
     }
-    if (sale && Number(sale.amount) === amount) {
-      setDraft(null);
-      return true;
+    const current = saleOf(getStore().sales, avatar.id, week);
+    if (!last.current && current && Number(current.amount) === amount) {
+      edit(null);
+      return Promise.resolve(true);
     }
-    busy.current = true;
-    setSaving(true);
-    try {
-      await saveSale(avatar, week, { amount, currency: code });
-      setDraft(null);
-      return true;
-    } catch (err) {
-      toast.error(err);
-      // "já lançado em outro aparelho": o campo volta a mostrar o que está valendo de fato
-      if (err instanceof AppError && err.kind === "conflict") setDraft(null);
-      return false;
-    } finally {
-      busy.current = false;
-      setSaving(false);
-    }
+
+    setSaving((count) => count + 1);
+    const done: Promise<boolean> = saveSale(avatar, week, { amount, currency: current?.currency ?? currency })
+      .then(
+        () => {
+          if (typed.current === value) edit(null);
+          return true;
+        },
+        (err: unknown) => {
+          toast.error(err);
+          if (typed.current === value) {
+            // "já lançado em outro aparelho": o campo volta a mostrar o que está valendo de fato
+            if (err instanceof AppError && err.kind === "conflict") edit(null);
+            else setInvalid(true); // não gravou: o valor continua no campo, marcado (Enter tenta de novo)
+          }
+          return false;
+        },
+      )
+      .finally(() => {
+        setSaving((count) => count - 1);
+        if (last.current?.done === done) last.current = null;
+      });
+    last.current = { text: value, done };
+    return done;
   }
 
   function onKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
     if (event.key === "Enter") {
       event.preventDefault();
-      // lança e já leva o cursor para o avatar de baixo
-      const next = event.currentTarget.closest("li")?.nextElementSibling?.querySelector<HTMLInputElement>("input");
       const input = event.currentTarget;
-      void commit().then((ok) => {
-        if (!ok) return;
-        if (next) next.focus();
-        else input.blur();
-      });
+      if (typed.current !== null && readAmount(typed.current) === "invalid") {
+        void commit(); // mostra o aviso; o cursor fica onde está
+        return;
+      }
+      // O cursor desce na hora, sem esperar a gravação: sair do campo é o que lança.
+      const next = input.closest("li")?.nextElementSibling?.querySelector<HTMLInputElement>("input");
+      if (next) next.focus();
+      else input.blur();
     } else if (event.key === "Escape") {
-      setDraft(null);
+      edit(null);
       event.currentTarget.blur();
     }
   }
 
+  async function openDetails() {
+    if (opening) return;
+    // Os detalhes só abrem depois que o que acabou de ser digitado foi lançado: a janela
+    // nunca nasce com uma cópia velha (em branco, ou com o valor anterior).
+    const done = commit();
+    const waiting = last.current !== null;
+    if (waiting) setOpening(true);
+    const ok = await done;
+    if (waiting) setOpening(false);
+    if (ok) onDetails();
+  }
+
   return (
-    <li className="flex items-center gap-3 py-2.5">
+    <li className="flex items-center gap-2 py-2.5 sm:gap-3">
       <AvatarPhoto name={avatar.name} url={avatar.photo_url} size="sm" className="hidden sm:flex" />
       <div className="min-w-0 flex-1">
-        <p className="flex items-center gap-1.5 truncate text-[15px] font-medium">
-          <span className="truncate">
-            {country?.flag ? `${country.flag} ` : ""}
-            {avatar.name}
-          </span>
-          {sale?.is_example ? <ExampleBadge /> : null}
+        {/* o nome pode ocupar duas linhas: em tela estreita, cortá-lo deixaria avatares parecidos iguais */}
+        <p className="line-clamp-2 text-[15px] font-medium leading-snug">
+          {country?.flag ? `${country.flag} ` : ""}
+          {avatar.name}
+          {sale?.is_example ? (
+            <>
+              {" "}
+              <ExampleBadge />
+            </>
+          ) : null}
         </p>
         <p className="flex items-center gap-1 truncate text-xs text-muted">
-          {saving ? (
+          {busy ? (
             <Spinner className="size-3" />
           ) : sale && draft === null ? (
             <Check className="size-3.5 shrink-0 text-emerald-500" strokeWidth={3} aria-hidden />
           ) : null}
-          <span className="truncate">{saving ? "salvando…" : note}</span>
+          <span className="truncate">{busy ? "salvando…" : invalid ? "não lançado" : note}</span>
         </p>
       </div>
-      <span className="relative block w-[7.5rem] shrink-0">
-        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted">
+      {/* O símbolo da moeda fica ao lado do campo (e não por cima dele): o valor usa toda a largura que sobra. */}
+      <label
+        className={cn(
+          "flex h-10 w-[8.5rem] shrink-0 cursor-text items-center gap-1.5 rounded-xl border bg-surface px-3 shadow-card transition-colors focus-within:ring-2",
+          invalid
+            ? "border-danger focus-within:ring-danger/25"
+            : "border-line-strong focus-within:border-primary focus-within:ring-ring/25",
+        )}
+      >
+        <span className="shrink-0 text-sm text-muted" aria-hidden>
           {currencySymbol(code)}
         </span>
         <input
           value={text}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => edit(e.target.value)}
           onFocus={(e) => e.currentTarget.select()}
           onBlur={() => void commit()}
           onKeyDown={onKeyDown}
@@ -227,11 +299,20 @@ function EntryRow({ avatar, country, week, sale, currency, rates, onDetails }: E
           placeholder="0,00"
           enterKeyHint="next"
           aria-label={`Vendas de ${avatar.name} na semana`}
-          className="h-10 w-full rounded-xl border border-line-strong bg-surface pl-11 pr-3 text-right text-base tabular-nums text-fg shadow-card outline-none transition-colors placeholder:text-muted/70 focus:border-primary focus:ring-2 focus:ring-ring/25 md:text-[15px]"
+          aria-invalid={invalid || undefined}
+          className="w-full min-w-0 flex-1 bg-transparent text-right text-base tabular-nums text-fg outline-none placeholder:text-muted/70 md:text-[15px]"
         />
-      </span>
-      <Button size="sm" variant="ghost" iconOnly aria-label={`Detalhes da venda de ${avatar.name}`} onClick={onDetails}>
-        <Ellipsis className="size-4 text-muted" />
+      </label>
+      {/* (não fica desabilitado enquanto espera: assim o foco volta para ele quando a janela fecha) */}
+      <Button
+        size="sm"
+        variant="ghost"
+        iconOnly
+        aria-busy={opening || undefined}
+        aria-label={`Detalhes da venda de ${avatar.name}`}
+        onClick={() => void openDetails()}
+      >
+        {opening ? <Spinner className="size-4" /> : <Ellipsis className="size-4 text-muted" />}
       </Button>
     </li>
   );

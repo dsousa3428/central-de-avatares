@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn, plural } from "@/lib/format";
 import { formatIn, niceScale, weekAgo, weekLabel, weekTick, type Unit, type WeekPoint } from "@/lib/sales";
 
@@ -22,10 +22,33 @@ const compact = new Intl.NumberFormat("pt-BR", { notation: "compact", maximumFra
  * O número em destaque acompanha a coluna apontada (mouse, toque ou teclado);
  * sem apontar nenhuma, mostra a semana mais recente. "Ver tabela" mostra os
  * mesmos números em lista.
+ *
+ * No celular, com um ano de semanas, cada coluna tem poucos pixels: por isso a
+ * coluna escolhida é a que está debaixo do dedo (pela posição), e dá para
+ * arrastar o dedo de lado para passar pelas semanas. A escolha fica até um
+ * toque fora do gráfico.
  */
 export function WeekChart({ points, unit, today, emptyText }: WeekChartProps) {
   const [active, setActive] = useState<number | null>(null);
   const [asTable, setAsTable] = useState(false);
+  const figure = useRef<HTMLElement>(null);
+
+  // um toque (ou clique) fora do gráfico solta a coluna escolhida
+  useEffect(() => {
+    if (active === null) return;
+    const release = (event: PointerEvent) => {
+      if (!(event.target instanceof Node) || !figure.current?.contains(event.target)) setActive(null);
+    };
+    document.addEventListener("pointerdown", release);
+    return () => document.removeEventListener("pointerdown", release);
+  }, [active]);
+
+  /** A coluna que está debaixo do dedo (ou do mouse), pela posição horizontal na área do gráfico. */
+  function columnAt(event: React.PointerEvent<HTMLDivElement>): number {
+    const box = event.currentTarget.getBoundingClientRect();
+    const index = Math.floor(((event.clientX - box.left) / Math.max(1, box.width)) * points.length);
+    return Math.min(points.length - 1, Math.max(0, index));
+  }
 
   const scale = niceScale(Math.max(0, ...points.map((point) => point.value)));
   // um estilo só por eixo: por extenso até 10 mil, abreviado dali em diante
@@ -36,7 +59,7 @@ export function WeekChart({ points, unit, today, emptyText }: WeekChartProps) {
   const empty = points.every((point) => point.value === 0);
 
   return (
-    <figure aria-label="Vendas por semana">
+    <figure ref={figure} aria-label="Vendas por semana">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0" aria-live="polite">
           <p className="text-2xl font-semibold tracking-tight">{formatIn(shown?.value ?? 0, unit)}</p>
@@ -89,7 +112,16 @@ export function WeekChart({ points, unit, today, emptyText }: WeekChartProps) {
             ))}
           </div>
 
-          <div className="relative h-44" onPointerLeave={() => setActive(null)}>
+          {/* touch-pan-y: arrastar de lado percorre as semanas; arrastar para cima/baixo continua rolando a página */}
+          <div
+            className="relative h-44 touch-pan-y"
+            onPointerDown={(event) => setActive(columnAt(event))}
+            onPointerMove={(event) => setActive(columnAt(event))}
+            onPointerLeave={(event) => {
+              // o mouse saiu: volta para a semana mais recente (um toque deixa a coluna escolhida)
+              if (event.pointerType !== "touch") setActive(null);
+            }}
+          >
             {scale.ticks.map((value) => (
               <div
                 key={value}
@@ -104,7 +136,6 @@ export function WeekChart({ points, unit, today, emptyText }: WeekChartProps) {
                   key={point.week}
                   type="button"
                   aria-label={`Semana de ${weekLabel(point.week, today)}: ${formatIn(point.value, unit)}`}
-                  onPointerEnter={() => setActive(i)}
                   onFocus={() => setActive(i)}
                   onBlur={() => setActive(null)}
                   onClick={() => setActive(i)}
@@ -112,7 +143,8 @@ export function WeekChart({ points, unit, today, emptyText }: WeekChartProps) {
                 >
                   <span
                     className={cn(
-                      "block w-full max-w-6 rounded-t-[4px] bg-primary transition-opacity",
+                      // a coluna não enche o espaço da semana: o que sobra é respiro entre uma e outra
+                      "block w-[72%] min-w-[3px] max-w-6 rounded-t-[4px] bg-primary transition-opacity",
                       "group-focus-visible:outline-2 group-focus-visible:outline-offset-2 group-focus-visible:outline-ring",
                       active !== null && active !== i && "opacity-45",
                     )}

@@ -120,6 +120,23 @@ export function parseDecimal(value: string): number | null {
 }
 
 /**
+ * Cotação digitada à mão -> número. Vazio ou inválido -> null.
+ * Diferente de um valor em dinheiro, numa cotação um separador sozinho é sempre o
+ * decimal: "5.432" e "5,432" são cinco reais e quarenta e três centavos — nunca cinco mil.
+ */
+export function parseRate(value: string): number | null {
+  const v = value.trim().replace(/\s/g, "");
+  if (!/^\d[\d.,]*$/.test(v)) return null;
+  const separators = v.replace(/\d/g, "");
+  if (separators.length <= 1) {
+    const n = Number(v.replace(",", "."));
+    return Number.isFinite(n) ? n : null;
+  }
+  // ponto e vírgula juntos ("1.234,56"): mesma leitura de um valor em dinheiro
+  return separators.includes(",") && separators.includes(".") ? parseDecimal(v) : null;
+}
+
+/**
  * Contagem digitada à mão (ex.: seguidores) -> número inteiro. Vazio ou inválido -> null.
  * "1840" · "1.840" · "12,3 mil" -> 12300 · "12.3k" -> 12300 · "1,2 mi" -> 1200000
  */

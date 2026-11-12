@@ -2,7 +2,7 @@
 //   node --test dev/unit/
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { normalizeHandle, normalizeUrl, parseCount, parseDecimal, safeHref } from "../../src/lib/format.ts";
+import { normalizeHandle, normalizeUrl, parseCount, parseDecimal, parseRate, safeHref } from "../../src/lib/format.ts";
 import { addDays, daysBetween, formatDuration, isValidISODate } from "../../src/lib/dates.ts";
 
 test("parseDecimal entende valores em dinheiro", () => {
@@ -22,6 +22,23 @@ test("parseDecimal entende valores em dinheiro", () => {
   };
   for (const [input, expected] of Object.entries(cases)) assert.equal(parseDecimal(input), expected, input);
   for (const bad of ["", "abc", "1,2,3", "1.2.3", "12a", ",5", "R$ 10"]) assert.equal(parseDecimal(bad), null, bad);
+});
+
+test("parseRate entende cotações: um separador sozinho é sempre o decimal", () => {
+  const cases = {
+    "6": 6,
+    "6,10": 6.1,
+    "6.10": 6.1,
+    "5.432": 5.432, // numa cotação, nunca "cinco mil"
+    "5,432": 5.432,
+    "0,18": 0.18,
+    "0.0375": 0.0375,
+    "1.234,56": 1234.56,
+    "1,234.56": 1234.56,
+    " 5,40 ": 5.4,
+  };
+  for (const [input, expected] of Object.entries(cases)) assert.equal(parseRate(input), expected, input);
+  for (const bad of ["", "abc", "1.2.3", "1,2,3", ",5", "-5", "R$ 5", "5,4x"]) assert.equal(parseRate(bad), null, bad);
 });
 
 test("parseCount entende contagens (seguidores)", () => {

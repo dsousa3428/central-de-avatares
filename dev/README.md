@@ -11,7 +11,7 @@ Nada desta pasta vai para a Vercel. Ela existe para testar o painel de verdade (
 | `e2e/etapa-a.cjs` | Teste de ponta a ponta da etapa (a), no tamanho de um celular. |
 | `e2e/etapa-b.cjs` | Etapa (b): aquecimento, tarefas da tela Hoje, dia pulado e empurrar o calendário, padrão em Configurações. |
 | `e2e/etapa-c.cjs` | Etapa (c): cofre de senhas — criar a senha-mestra, guardar, mostrar/copiar, trancar (à mão, sozinho, ao sair), trocar a senha (inclusive com o banco sem a função nova), dois aparelhos, apagar o cofre. Confere também o banco (só texto cifrado) e a rede (nenhuma senha em texto claro sai do aparelho). Leva uns 4 minutos: espera de verdade o trancamento automático. |
-| `e2e/etapa-d.cjs` | Etapa (d): vendas — lançamento rápido por semana, detalhes, cotações e conversão para reais, gráfico e tabela, ranking, aba Vendas do avatar, vendas do mês em Países, tabela de vendas na Planilha, dois aparelhos, exemplos. |
+| `e2e/etapa-d.cjs` | Etapa (d): vendas — lançamento rápido por semana (inclusive digitando rápido, com as gravações atrasadas de propósito), detalhes, cotações e conversão para reais (cotação guardada em cada venda, recalcular vendas antigas), gráfico (toque e arrastar) e tabela, ranking, aba Vendas do avatar, vendas do mês em Países, tabela de vendas na Planilha, dois aparelhos, exemplos. |
 | `e2e/planilha.cjs` | Planilha: grade, edição nas células, ordenar, filtrar, buscar, copiar e baixar. |
 | `e2e/extras.cjs` | Situações de exceção: banco sem tabelas, queda de internet ao salvar e regras dos dados de exemplo. |
 | `e2e/robustez.cjs` | Dois aparelhos ao mesmo tempo, toques rápidos, falhas no meio de um salvamento, validações de digitação, sair em outra aba. |

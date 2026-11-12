@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { formatMoney, parseDecimal } from "@/lib/format";
+import { formatMoney, parseRate } from "@/lib/format";
 import { CURRENCIES } from "@/lib/reference";
-import { type Rates } from "@/lib/sales";
+import { formatRate, type Rates } from "@/lib/sales";
 import { saveRates } from "@/lib/sales-actions";
 import { useStore } from "@/lib/store";
 import { invalid } from "@/components/common/validation";
@@ -11,10 +11,6 @@ import { Input, Select } from "@/components/ui/field";
 import { FormModal } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
 import { useRates } from "./use-rates";
-
-function rateText(value: number | undefined): string {
-  return value === undefined ? "" : String(value).replace(".", ",");
-}
 
 /** Cotações digitadas à mão: quantos reais vale 1 unidade de cada moeda. */
 export function RatesForm({ onClose }: { onClose: () => void }) {
@@ -32,20 +28,23 @@ export function RatesForm({ onClose }: { onClose: () => void }) {
     return [...used].sort();
   });
   const [values, setValues] = useState<Record<string, string>>(() =>
-    Object.fromEntries(Object.entries(rates).map(([code, rate]) => [code, rateText(rate)])),
+    Object.fromEntries(Object.entries(rates).map(([code, rate]) => [code, formatRate(rate)])),
   );
+  // "usar também nas vendas já lançadas": para consertar uma cotação digitada errada
+  const [applyToPast, setApplyToPast] = useState(false);
   const others = CURRENCIES.filter((c) => c.code !== "BRL" && !codes.includes(c.code));
+  const hasForeignSales = db.sales.some((sale) => sale.currency.toUpperCase() !== "BRL");
 
   async function submit() {
     const next: Rates = {};
     for (const code of codes) {
       const text = (values[code] ?? "").trim();
       if (!text) continue; // em branco = sem cotação
-      const rate = parseDecimal(text);
+      const rate = parseRate(text);
       if (rate === null || rate <= 0 || rate > 1_000_000) invalid(`Não entendi a cotação de ${code}. Exemplo: 6,10.`);
       next[code] = rate;
     }
-    await saveRates(next);
+    await saveRates(next, { applyToPast });
     toast.success("Cotações salvas");
   }
 
@@ -64,7 +63,7 @@ export function RatesForm({ onClose }: { onClose: () => void }) {
         <ul className="space-y-2.5">
           {codes.map((code) => {
             const name = CURRENCIES.find((c) => c.code === code)?.name;
-            const parsed = parseDecimal(values[code] ?? "");
+            const parsed = parseRate(values[code] ?? "");
             return (
               <li key={code} className="flex items-center gap-3">
                 <label htmlFor={`cotacao-${code}`} className="min-w-0 flex-1 text-[15px]">
@@ -109,9 +108,28 @@ export function RatesForm({ onClose }: { onClose: () => void }) {
         </Select>
       ) : null}
 
+      {hasForeignSales ? (
+        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-line bg-surface-2/60 p-3.5">
+          <input
+            type="checkbox"
+            checked={applyToPast}
+            onChange={(e) => setApplyToPast(e.target.checked)}
+            className="mt-0.5 size-5 shrink-0 accent-[var(--primary)]"
+          />
+          <span className="text-sm leading-relaxed">
+            <span className="font-medium">Usar também nas vendas já lançadas</span>
+            <span className="block text-muted">
+              Marque só para consertar uma cotação digitada errada: as vendas antigas dessas moedas são recalculadas
+              com os valores acima.
+            </span>
+          </span>
+        </label>
+      ) : null}
+
       <p className="text-xs leading-relaxed text-muted">
-        Cada lançamento novo guarda a cotação do dia, para o total de uma semana antiga não mudar quando você
-        atualizar a cotação. Lançamentos feitos sem cotação usam a que estiver aqui.
+        Cada venda guarda a cotação do dia em que foi lançada, para o total de uma semana antiga não mudar quando
+        você atualizar a cotação. As vendas lançadas antes de a moeda ter cotação ficam com a primeira que você
+        digitar. Para mudar a cotação de uma venda só, abra os detalhes dela.
       </p>
     </FormModal>
   );

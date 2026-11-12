@@ -6,7 +6,7 @@ import { ChevronRight, Clock, Coins, Globe, Languages, Pencil, Plus, Tags, UserR
 import { formatDayMonth, timeInZone, todayISO } from "@/lib/dates";
 import { copyText } from "@/lib/clipboard";
 import { formatNumber } from "@/lib/format";
-import { cleanRates, describeTotals, monthKey, monthName, salesOfMonth, sumSales } from "@/lib/sales";
+import { cleanRates, currentMonth, describeTotals, monthName, salesOfMonth, sumSales } from "@/lib/sales";
 import {
   accountsOf,
   currentAccount,
@@ -249,7 +249,7 @@ function AvatarCard({ db, avatar }: { db: Db; avatar: Avatar }) {
   const month = sumSales(
     salesOfMonth(
       db.sales.filter((sale) => sale.avatar_id === avatar.id),
-      monthKey(today),
+      currentMonth(today),
     ),
     rates,
   );
@@ -308,7 +308,7 @@ function AvatarCard({ db, avatar }: { db: Db; avatar: Avatar }) {
           </>
         )}
         <p className="mt-2.5 flex items-baseline justify-between gap-3 border-t border-line pt-2.5 text-sm">
-          <span className="text-muted">Vendas em {monthName(monthKey(today))}</span>
+          <span className="text-muted">Vendas em {monthName(currentMonth(today), today)}</span>
           <span className="shrink-0 text-right">
             <span className="font-semibold tabular-nums">{month.entries === 0 ? "—" : monthText.primary}</span>
             {month.entries > 0 && monthText.secondary ? (
