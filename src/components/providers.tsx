@@ -5,6 +5,7 @@ import { AuthProvider } from "@/lib/auth";
 import { applyTheme } from "@/lib/theme";
 import { ConfirmProvider } from "@/components/ui/confirm";
 import { ToastProvider } from "@/components/ui/toast";
+import { VaultProvider } from "@/components/vault/vault-provider";
 
 /** Mantém o tema em dia quando o sistema troca entre claro e escuro. */
 function ThemeSync() {
@@ -22,7 +23,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <AuthProvider>
       <ToastProvider>
-        <ConfirmProvider>{children}</ConfirmProvider>
+        <VaultProvider>
+          <ConfirmProvider>{children}</ConfirmProvider>
+        </VaultProvider>
       </ToastProvider>
       <ThemeSync />
     </AuthProvider>

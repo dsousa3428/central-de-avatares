@@ -327,6 +327,16 @@ async function exampleIds(table: string): Promise<string[]> {
   return ((data ?? []) as Array<{ id: string }>).map((r) => r.id);
 }
 
+async function exampleAccountsWithSecrets(): Promise<string[]> {
+  const { data, error } = await getSupabase()
+    .from("accounts")
+    .select("id")
+    .eq("is_example", true)
+    .not("secrets_enc", "is", null);
+  if (error) throw toAppError(error);
+  return ((data ?? []) as Array<{ id: string }>).map((r) => r.id);
+}
+
 async function deleteIds(table: string, ids: string[]): Promise<void> {
   if (ids.length === 0) return;
   const { error } = await getSupabase().from(table).delete().in("id", ids);
@@ -342,10 +352,19 @@ async function keepIds(table: string, ids: string[]): Promise<void> {
 /**
  * Apaga os exemplos de baixo para cima (contas → avatares → país → aparelhos).
  * Regra de segurança: se você cadastrou algo SEU dentro de um exemplo (por
- * exemplo, um avatar real dentro do país de exemplo), esse exemplo NÃO é
- * apagado — ele apenas deixa de ser marcado como exemplo.
+ * exemplo, um avatar real dentro do país de exemplo, ou senhas no cofre de uma
+ * conta de exemplo), esse exemplo NÃO é apagado — ele apenas deixa de ser
+ * marcado como exemplo.
  */
 export async function deleteExamples(): Promise<void> {
+  // 0) Conta de exemplo com senhas guardadas no cofre é conteúdo de verdade: ela fica (só deixa
+  //    de ser exemplo), com o aquecimento e a linha do tempo. O avatar, o país, o celular e o
+  //    perfil dela ficam também, pelas regras logo abaixo.
+  const withSecrets = await exampleAccountsWithSecrets();
+  await unmarkWhere("activity_log", "account_id", withSecrets);
+  await unmarkWhere("warmups", "account_id", withSecrets);
+  await keepIds("accounts", withSecrets);
+
   // 1) registros "folha"
   await deleteIds("activity_log", await exampleIds("activity_log"));
   await deleteIds("weekly_sales", await exampleIds("weekly_sales"));

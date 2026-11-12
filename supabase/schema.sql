@@ -225,7 +225,8 @@ create index if not exists activity_avatar_idx  on public.activity_log (avatar_i
 -- ---------------------------------------------------------------------
 create table if not exists public.settings (
   user_id          uuid primary key default auth.uid() references auth.users (id) on delete cascade,
-  -- cofre: só o "sal" e um teste de conferência. A senha-mestra NUNCA é guardada.
+  -- cofre: só o "sal", o número de rodadas e um teste de conferência (texto fixo
+  -- cifrado). A senha-mestra e a chave do cofre NUNCA são guardadas.
   vault            jsonb,
   warmup_defaults  jsonb,                          -- padrão de aquecimento
   brl_rates        jsonb not null default '{}'::jsonb,   -- cotações digitadas: {"EUR": 6.1}
@@ -278,6 +279,88 @@ begin
   end loop;
 end
 $$;
+
+-- ---------------------------------------------------------------------
+-- VERSÃO DA ESTRUTURA
+-- O painel pergunta este número quando uma tela depende de algo que foi
+-- acrescentado depois (hoje: a troca da senha-mestra). Aumente ao acrescentar.
+-- ---------------------------------------------------------------------
+create or replace function public.cda_schema_version()
+returns integer
+language sql
+immutable
+set search_path = ''
+as $$ select 2 $$;
+
+revoke all on function public.cda_schema_version() from public, anon;
+grant execute on function public.cda_schema_version() to authenticated;
+
+
+-- ---------------------------------------------------------------------
+-- COFRE: trocar a senha-mestra
+-- A chave do cofre sai direto da senha-mestra. Trocar a senha muda a chave,
+-- então TODAS as senhas guardadas precisam ser regravadas — já cifradas, no
+-- navegador, com a chave nova. Esta função faz a troca de uma vez só: ou grava
+-- tudo (configuração do cofre + senhas de todas as contas), ou não grava nada.
+-- Ela nunca vê senha nenhuma em texto claro: só recebe e grava texto cifrado.
+--
+--   expected_salt  o "sal" do cofre atual (a troca só vale se ele ainda for o mesmo)
+--   new_vault      a nova configuração do cofre
+--   new_secrets    {"<id da conta>": {"old": "<bloco atual>", "new": "<bloco recifrado>"}}
+-- ---------------------------------------------------------------------
+create or replace function public.cda_vault_rekey(expected_salt text, new_vault jsonb, new_secrets jsonb)
+returns void
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  changed integer;
+begin
+  if expected_salt is null or new_vault is null or new_secrets is null
+     or jsonb_typeof(new_vault) <> 'object' or jsonb_typeof(new_secrets) <> 'object' then
+    raise exception 'cda_vault_invalid' using errcode = '22023';
+  end if;
+
+  -- 1) a configuração só é trocada se o cofre ainda for o que o aparelho conhece
+  update public.settings
+     set vault = new_vault
+   where user_id = (select auth.uid())
+     and vault ->> 'salt' = expected_salt;
+  get diagnostics changed = row_count;
+  if changed <> 1 then
+    raise exception 'cda_vault_changed' using errcode = 'P0001';
+  end if;
+
+  -- 2) segura as contas até o fim, para nada mudar no meio da troca
+  perform 1 from public.accounts where user_id = (select auth.uid()) for update;
+
+  -- 3) toda conta com senhas guardadas precisa estar na lista, com o bloco que o
+  --    aparelho leu; se alguma mudou nesse meio tempo, a troca inteira é desfeita
+  if exists (
+    select 1
+      from public.accounts a
+     where a.user_id = (select auth.uid())
+       and a.secrets_enc is not null
+       and (
+         a.secrets_enc is distinct from (new_secrets -> a.id::text ->> 'old')
+         or (new_secrets -> a.id::text ->> 'new') is null
+       )
+  ) then
+    raise exception 'cda_vault_secrets_changed' using errcode = 'P0001';
+  end if;
+
+  -- 4) grava os blocos recifrados
+  update public.accounts a
+     set secrets_enc = new_secrets -> a.id::text ->> 'new'
+   where a.user_id = (select auth.uid())
+     and a.secrets_enc is not null;
+end
+$$;
+
+revoke all on function public.cda_vault_rekey(text, jsonb, jsonb) from public, anon;
+grant execute on function public.cda_vault_rekey(text, jsonb, jsonb) to authenticated;
+
 
 -- avisa a API do Supabase que a estrutura mudou
 notify pgrst, 'reload schema';

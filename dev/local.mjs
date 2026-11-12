@@ -3,6 +3,7 @@
 //
 //   node dev/local.mjs up      sobe o Supabase local, aplica supabase/schema.sql,
 //                              cria o usuário de teste e escreve o .env.local
+//   node dev/local.mjs schema  aplica de novo supabase/schema.sql (depois de mudar o script)
 //   node dev/local.mjs reset   apaga os dados do painel (mantém o usuário de teste)
 //   node dev/local.mjs down    desliga tudo e apaga o banco local
 //   node dev/local.mjs psql "select 1"   roda um SQL no banco local
@@ -96,6 +97,16 @@ async function waitFor(url, label) {
   throw new Error(`${label} não respondeu em ${url}`);
 }
 
+/** Roda supabase/schema.sql no banco local (pode repetir à vontade: o script não apaga nada). */
+export function applySchema() {
+  console.log("Aplicando supabase/schema.sql…");
+  execFileSync(
+    "docker",
+    ["compose", "exec", "-T", "db", "psql", "-U", "postgres", "-d", "postgres", "-q", "-v", "ON_ERROR_STOP=1"],
+    { cwd: stackDir, input: readFileSync(join(root, "supabase", "schema.sql")), stdio: ["pipe", "ignore", "inherit"] },
+  );
+}
+
 async function up() {
   await ensureDocker();
   const env = ensureEnv();
@@ -103,12 +114,7 @@ async function up() {
   await waitFor("http://localhost:54399/health", "Auth");
   await waitFor("http://localhost:54398/", "API");
 
-  console.log("Aplicando supabase/schema.sql…");
-  execFileSync(
-    "docker",
-    ["compose", "exec", "-T", "db", "psql", "-U", "postgres", "-d", "postgres", "-q", "-v", "ON_ERROR_STOP=1"],
-    { cwd: stackDir, input: readFileSync(join(root, "supabase", "schema.sql")), stdio: ["pipe", "ignore", "inherit"] },
-  );
+  applySchema();
 
   // gateway (porta 54321)
   let gatewayUp = false;
@@ -159,9 +165,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   try {
     if (command === "up") await up();
     else if (command === "reset") reset();
+    else if (command === "schema") applySchema();
     else if (command === "down") down();
     else if (command === "psql") console.log(psql(process.argv[3] ?? "select 1"));
-    else console.log("Uso: node dev/local.mjs up | reset | down | psql \"<sql>\"");
+    else console.log("Uso: node dev/local.mjs up | schema | reset | down | psql \"<sql>\"");
   } catch (err) {
     console.error(String(err?.message ?? err));
     process.exit(1);

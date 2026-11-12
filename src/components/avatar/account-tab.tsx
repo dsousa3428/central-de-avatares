@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AtSign, Pencil, Plus, UserRound } from "lucide-react";
+import { Pencil, Plus, UserRound } from "lucide-react";
 import { formatDate, formatDateTime, formatDuration, relativeDay } from "@/lib/dates";
 import { formatNumber, parseCount } from "@/lib/format";
 import { generationLabel, lifetimeDays, nextGeneration, phoneLabel, profileLabel } from "@/lib/selectors";
@@ -17,6 +17,7 @@ import { CopyButton } from "@/components/ui/copy-button";
 import { Field, Input, Select } from "@/components/ui/field";
 import { FormModal } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
+import { AccountSecrets } from "@/components/vault/account-secrets";
 import { AccountForm } from "./account-form";
 
 interface AccountTabProps {
@@ -190,11 +191,7 @@ function CurrentAccount({ account, onEdit, onUpdateFollowers }: CurrentAccountPr
         </DetailList>
       </Section>
 
-      <p className="flex items-start gap-2 px-1 text-xs leading-relaxed text-muted">
-        <AtSign className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-        Senhas e códigos de backup desta conta ficarão aqui a partir da etapa do cofre (criptografados com a sua
-        senha-mestra).
-      </p>
+      <AccountSecrets key={account.id} account={account} />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 # Central de Avatares
 
-Painel **privado**, de um único usuário, para organizar contas de Instagram de avatares de IA em vários países: países, avatares, contas (gerações), aquecimento com tarefas do dia, celulares, perfis do navegador anti-detect, links, kit de reposição, uma visão em planilha de tudo e, nas próximas etapas, cofre de senhas e vendas.
+Painel **privado**, de um único usuário, para organizar contas de Instagram de avatares de IA em vários países: países, avatares, contas (gerações), aquecimento com tarefas do dia, cofre de senhas, celulares, perfis do navegador anti-detect, links, kit de reposição, uma visão em planilha de tudo e, nas próximas etapas, vendas.
 
 > O painel é só de organização. Ele **não acessa o Instagram**, não automatiza nada e não faz login em conta nenhuma.
 
@@ -11,7 +11,7 @@ Painel **privado**, de um único usuário, para organizar contas de Instagram de
 | **a** | Base do app, login, países, avatares, contas, infraestrutura, exemplos | ✅ pronta |
 | **b** | Aquecimento (calendário por conta) + tela Hoje com as tarefas do dia | ✅ pronta |
 | **+** | Planilha: tudo em tabela, com edição nas células, filtros e exportação | ✅ pronta |
-| **c** | Cofre de senhas (criptografia no aparelho, com senha-mestra) | a fazer |
+| **c** | Cofre de senhas (criptografia no aparelho, com senha-mestra) | ✅ pronta |
 | **d** | Vendas semanais, totais, gráfico, ranking, conversão para BRL | a fazer |
 | **e** | Botão "Conta caiu" + assistente de reposição + avisos automáticos | a fazer |
 | **f** | App instalável (PWA), backup (exportar/importar), busca global | a fazer |
@@ -113,6 +113,7 @@ Daqui para frente, toda atualização enviada ao GitHub é publicada sozinha pel
 |---|---|
 | **"Falta conectar o Supabase"** | Uma das duas variáveis da Vercel está faltando ou com erro de digitação. Vercel → projeto → **Settings → Environment Variables** → corrija → **Deployments** → menu **⋯** do último → **Redeploy**. |
 | **"Falta preparar o banco de dados"** | O script do banco ainda não foi rodado (ou há uma versão nova). Toque em **Copiar script SQL** na própria tela, cole no **SQL Editor** do Supabase, **Run**, e volte tocando em **Já rodei**. |
+| **"o banco de dados precisa de uma atualização"** (ao trocar a senha-mestra) | É o mesmo script, numa versão mais nova. A janela tem o botão **Copiar script SQL**: cole no **SQL Editor** do Supabase, **Run**, volte e toque em **Já rodei**. Rodar de novo é seguro, não apaga nada. |
 | **"E-mail ou senha incorretos"** | Confira o usuário em Supabase → **Authentication → Users**. Se precisar, apague e crie de novo marcando **Auto Confirm User**. |
 | O painel parou de abrir depois de dias sem uso | No plano gratuito, o Supabase pausa projetos parados há cerca de uma semana. Entre no Supabase e clique em **Restore project**. Os dados continuam lá. |
 
@@ -125,9 +126,10 @@ Daqui para frente, toda atualização enviada ao GitHub é publicada sozinha pel
 - **Avatar** — toque em um avatar para abrir a página dele, com as seções: Visão geral · Conta atual · Aquecimento · Links · Vídeos para modelar · Perfis de exemplo · Kit de reposição · Histórico · Anotações.
 - **Contas** — cada conta é uma *geração* do avatar. Quando uma cai, mude o status para **Caída** (o painel pede data e motivo) e crie a próxima geração: o @ já vem preenchido.
 - **Aquecimento** — toda conta nova nasce com um calendário (padrão: 10 dias, usa nos dias 1, 3, 5, 7 e 9 e descansa nos pares). Dá para ajustar cada dia (minutos, o que fazer, uso ou descanso), a data de início e a duração. A data de fim é calculada sozinha. Se um dia de uso passar sem marcar, o painel pergunta: **Fiz no dia** ou **Não fiz: empurrar para hoje** — e recalcula o fim. Quando a conta sai do status *Aquecendo*, o calendário é encerrado; se ela voltar para *Aquecendo*, ele continua de onde parou. O padrão para contas novas fica em Configurações.
+- **Cofre de senhas** — na aba *Conta atual* de cada avatar há o bloco **Senhas e códigos**: senha do Instagram, senha do e-mail, e-mail de recuperação e códigos de backup/2FA. Na primeira vez você cria a **senha-mestra**; depois é só destrancar. Os campos ficam escondidos, com botões de **mostrar** e **copiar**. O cofre tranca sozinho depois de alguns minutos sem uso (o tempo fica em Configurações), ao recarregar a página e ao sair. Contas antigas têm o mesmo bloco no *Histórico* (ícone da chave).
 - **Planilha** — os mesmos dados em formato de tabela (Contas, Avatares, Celulares e Perfis). Toque no título de uma coluna para ordenar, use os filtros e a busca, e edite direto nas células das colunas marcadas com um lápis. **Copiar** leva a tabela para colar no Excel ou no Google Planilhas; **Baixar** gera um arquivo CSV.
 - **Infraestrutura** — celulares e perfis do anti-detect, mostrando qual conta está em cada um, quais estão livres e quais já foram usados por conta que caiu. No celular fica no botão **Mais**.
-- **Configurações** — tema claro/escuro, padrão de aquecimento, apagar (ou recriar) os dados de exemplo e sair. No celular fica no botão **Mais**.
+- **Configurações** — tema claro/escuro, cofre de senhas (criar ou trocar a senha-mestra, trancar, tempo para trancar sozinho), padrão de aquecimento, apagar (ou recriar) os dados de exemplo e sair. No celular fica no botão **Mais**.
 - **Exemplos** — Itália e Fra' Salvio vêm com dados fictícios. Se quiser aproveitar um exemplo como dado seu, abra o avatar (ou o país) e toque em **Ficar com este avatar / país**: ele deixa de ser exemplo e não é mais apagado em "Apagar exemplos".
 
 O painel avisa quando você escolhe um celular, perfil ou proxy que já está em uso por outra conta, ou que foi usado por uma conta que caiu.
@@ -139,7 +141,21 @@ O painel avisa quando você escolhe um celular, perfil ou proxy que já está em
 - **Nenhuma chave secreta no código**: as duas informações do Supabase ficam nas variáveis de ambiente da Vercel.
 - **Links abrem sem revelar a origem**: ao abrir seu site de vendas ou qualquer link, o site de destino não recebe o endereço do painel.
 - O painel pede aos buscadores para **não ser indexado** e não pode ser embutido em outros sites.
-- A partir da etapa (c), senhas e códigos de backup serão **criptografados no seu aparelho** antes de irem para o banco. Sem a senha-mestra, ninguém (nem eu, nem o Supabase) consegue ler. **Se você perder a senha-mestra, as senhas guardadas não podem ser recuperadas.**
+- Como camada extra, o navegador é instruído (Content-Security-Policy) a só carregar código do próprio painel e a só abrir conexões de dados com o painel e com o seu Supabase.
+
+### Cofre de senhas
+
+- Senhas, e-mails de recuperação e códigos de backup são **criptografados no seu aparelho** antes de irem para o banco. O banco só guarda texto cifrado; sem a senha-mestra, ninguém (nem eu, nem o Supabase) consegue ler.
+- A **senha-mestra não é salva em lugar nenhum** e nunca é enviada pela internet. Ela só existe enquanto você digita.
+- **Se você perder a senha-mestra, as senhas guardadas não podem ser recuperadas.** Anote num papel e guarde em lugar seguro. A única saída, nesse caso, é apagar o cofre (Configurações → Cofre de senhas → *Esqueci a senha-mestra*) e guardar as senhas de novo.
+- A senha-mestra é diferente da senha de login. Use outra: no mínimo 12 caracteres, de preferência uma frase de 3 ou 4 palavras soltas. Se o navegador oferecer para salvá-la, recuse.
+- O cofre tranca sozinho depois de alguns minutos sem uso, ao recarregar a página e ao sair da conta. Um campo que você mandou mostrar se esconde sozinho depois de 30 segundos.
+- A Planilha e as exportações nunca incluem senhas — só dizem se a conta tem senhas guardadas.
+
+- Ao copiar uma senha, o painel tenta limpar a área de transferência depois de 1 minuto e quando o cofre tranca (o navegador só permite isso com o painel aberto na frente).
+- **Trocar a senha-mestra** (Configurações → Cofre de senhas): todas as senhas guardadas são cifradas de novo com a senha nova, de uma vez só. Na primeira vez o painel pede para rodar o script SQL atualizado no Supabase — ele mesmo mostra o botão **Copiar script SQL** e o passo a passo. Se você acha que alguém descobriu a senha antiga, troque também as senhas das próprias contas.
+
+Para quem quiser os detalhes: a senha-mestra passa por PBKDF2 (SHA-256, 600 mil rodadas, sal aleatório) e vira a chave AES-256 do cofre, que cifra as senhas de cada conta com AES-256-GCM (um IV novo a cada gravação). O banco guarda só o sal, o número de rodadas, um teste de conferência (um texto fixo cifrado, para saber se a senha digitada está certa) e os blocos cifrados. Tudo é feito com a Web Crypto do próprio navegador.
 
 ## Para quem for mexer no código
 

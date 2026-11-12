@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { getSupabase, isSupabaseConfigured } from "./supabase";
 import { resetStore } from "./store";
+import { lockVault } from "./vault";
 
 export type AuthState =
   | { status: "loading" }
@@ -38,8 +39,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!active) return;
-      // saiu (aqui ou em outra aba): não deixa nenhum dado na memória
-      if (!session) resetStore();
+      // saiu (aqui ou em outra aba): não deixa nenhum dado na memória — nem a chave do cofre
+      if (!session) {
+        lockVault();
+        resetStore();
+      }
       setState(fromSession(session));
     });
 
@@ -66,6 +70,7 @@ export function useAuth(): AuthState {
 
 /** Sai da conta e recarrega a página, limpando tudo que estava na memória. */
 export async function signOut(): Promise<void> {
+  lockVault(); // a chave do cofre sai da memória antes de qualquer outra coisa
   try {
     await getSupabase().auth.signOut({ scope: "local" });
   } catch {

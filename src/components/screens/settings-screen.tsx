@@ -8,6 +8,7 @@ import { plural } from "@/lib/format";
 import { refresh, saveSettings, useStore } from "@/lib/store";
 import { setThemeChoice, useThemeChoice, type ThemeChoice } from "@/lib/theme";
 import { describePlan, planFromSettings } from "@/lib/warmup";
+import { VaultSettings } from "@/components/vault/vault-settings";
 import { DefaultPlanForm } from "@/components/warmup/default-plan-form";
 import { PageHeader } from "@/components/shell/page-header";
 import { Button } from "@/components/ui/button";
@@ -17,7 +18,6 @@ import { Segmented } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/toast";
 
 const UPCOMING: Array<{ step: string; title: string; text: string }> = [
-  { step: "c", title: "Cofre de senhas", text: "Senhas e códigos de backup criptografados no seu aparelho com uma senha-mestra." },
   { step: "d", title: "Vendas", text: "Lançamento semanal, totais, gráfico, ranking e conversão para reais." },
   { step: "e", title: "“Conta caiu” + avisos", text: "Assistente de reposição com checklist e avisos automáticos de risco." },
   { step: "f", title: "App instalável + backup", text: "Instalar no celular, exportar/importar tudo, busca global." },
@@ -58,8 +58,10 @@ export function SettingsScreen() {
           </p>
           {exampleNames.length > 0 ? <p className="mt-2">Exemplos: {exampleNames.join(", ")}.</p> : null}
           <p className="mt-2">
-            O que você cadastrou do zero continua intacto. Quer manter algum exemplo como seu? Cancele, abra o avatar
-            ou o país e toque em <strong>“Ficar com este avatar / país”</strong>.
+            O que você cadastrou do zero continua intacto, e uma conta de exemplo que tenha{" "}
+            <strong>senhas guardadas no cofre</strong> não é apagada (ela, o avatar e o país só deixam de ser
+            exemplo). Quer manter algum outro exemplo como seu? Cancele, abra o avatar ou o país e toque em{" "}
+            <strong>“Ficar com este avatar / país”</strong>.
           </p>
         </>
       ),
@@ -133,6 +135,8 @@ export function SettingsScreen() {
             ]}
           />
         </Section>
+
+        <VaultSettings />
 
         <Section
           title="Padrão de aquecimento"

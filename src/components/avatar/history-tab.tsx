@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { History, Pencil, Plus, Trash2 } from "lucide-react";
+import { History, KeyRound, Pencil, Plus, Trash2 } from "lucide-react";
 import { formatDate, formatDateTime, formatDuration } from "@/lib/dates";
 import { formatNumber } from "@/lib/format";
 import { generationLabel, lifetimeDays, phoneLabel, profileShortLabel } from "@/lib/selectors";
@@ -11,7 +11,9 @@ import { AccountStatusBadge, ExampleBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, EmptyState } from "@/components/ui/card";
 import { useConfirm } from "@/components/ui/confirm";
+import { Modal } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
+import { AccountSecrets } from "@/components/vault/account-secrets";
 import { AccountForm } from "./account-form";
 
 interface HistoryTabProps {
@@ -25,6 +27,8 @@ export function HistoryTab({ avatar, accounts }: HistoryTabProps) {
   const toast = useToast();
   const confirm = useConfirm();
   const [editing, setEditing] = useState<Account | "new" | null>(null);
+  const [secretsOf, setSecretsOf] = useState<string | null>(null);
+  const secretsAccount = accounts.find((a) => a.id === secretsOf);
 
   const fallenLives = accounts
     .filter((a) => a.status === "caida")
@@ -92,6 +96,16 @@ export function HistoryTab({ avatar, accounts }: HistoryTabProps) {
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    iconOnly
+                    aria-label="Senhas da conta"
+                    title={account.secrets_enc ? "Senhas guardadas no cofre" : "Senhas da conta"}
+                    onClick={() => setSecretsOf(account.id)}
+                  >
+                    <KeyRound className={account.secrets_enc ? "size-4 text-primary" : "size-4 text-muted"} />
+                  </Button>
                   <Button size="sm" variant="ghost" iconOnly aria-label="Editar conta" onClick={() => setEditing(account)}>
                     <Pencil className="size-4 text-muted" />
                   </Button>
@@ -177,6 +191,16 @@ export function HistoryTab({ avatar, accounts }: HistoryTabProps) {
           account={editing === "new" ? undefined : editing}
           onClose={() => setEditing(null)}
         />
+      ) : null}
+      {secretsAccount ? (
+        <Modal
+          open
+          onClose={() => setSecretsOf(null)}
+          title="Senhas e códigos"
+          description={`@${secretsAccount.handle} · ${generationLabel(secretsAccount.generation)}`}
+        >
+          <AccountSecrets key={secretsAccount.id} account={secretsAccount} bare />
+        </Modal>
       ) : null}
     </div>
   );

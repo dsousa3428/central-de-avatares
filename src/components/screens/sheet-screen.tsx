@@ -304,6 +304,8 @@ function AccountsSheet({ db }: { db: Db }) {
             updateRow("accounts", r.account.id, { email: clean(value)?.toLowerCase() ?? null }, quick),
         },
       },
+      // só diz se há senhas guardadas: o conteúdo do cofre nunca aparece (nem é exportado) aqui
+      { key: "senhas", header: "Senhas", text: (r) => (r.account.secrets_enc ? "No cofre" : "") },
       {
         key: "criada",
         header: "Criada em",

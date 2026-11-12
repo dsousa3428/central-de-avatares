@@ -161,6 +161,7 @@ export type ActivityKind =
   | "aquecimento_iniciado"
   | "aquecimento_empurrado"
   | "aquecimento_concluido"
+  | "senhas_atualizadas"
   | "nota";
 
 export interface ActivityEntry extends BaseRow {
@@ -175,6 +176,8 @@ export interface ActivityEntry extends BaseRow {
 export interface AppPrefs {
   /** Versão dos dados de exemplo já criados (0/ausente = nunca). */
   examples_version?: number;
+  /** Minutos sem uso até o cofre de senhas trancar sozinho (padrão: 5). */
+  vault_lock_minutes?: number;
 }
 
 export interface Settings {

@@ -1,14 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Database, ExternalLink, PlugZap, RefreshCw, TriangleAlert } from "lucide-react";
 import type { AppError } from "@/lib/errors";
-import { copyText } from "@/lib/clipboard";
 import { signOut } from "@/lib/auth";
 import type { SupabaseConfigProblem } from "@/lib/supabase";
+import { CopySchemaButton } from "@/components/common/copy-schema-button";
 import { Button, buttonClass } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
-import { useToast } from "@/components/ui/toast";
 
 function SetupLayout({
   icon,
@@ -76,30 +74,6 @@ export function EnvMissingScreen({ problem }: { problem: SupabaseConfigProblem }
 
 /** As tabelas ainda não existem (ou estão desatualizadas) no Supabase. */
 export function SchemaMissingScreen({ error, onRetry }: { error: AppError; onRetry: () => void }) {
-  const toast = useToast();
-  const [sql, setSql] = useState<string | null>(null);
-
-  // Já deixa o script na memória: ao tocar em "Copiar" a cópia é imediata.
-  useEffect(() => {
-    let active = true;
-    fetch("/schema.sql")
-      .then((response) => (response.ok ? response.text() : null))
-      .then((text) => {
-        if (active && text) setSql(text);
-      })
-      .catch(() => {});
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  async function copySql() {
-    if (!sql) return;
-    const ok = await copyText(sql);
-    if (ok) toast.success("Script copiado. Agora cole no SQL Editor do Supabase.");
-    else toast.error("Não consegui copiar. Abra o arquivo supabase/schema.sql no GitHub e copie de lá.");
-  }
-
   return (
     <SetupLayout icon={<Database />} title="Falta preparar o banco de dados">
       <p>
@@ -122,9 +96,7 @@ export function SchemaMissingScreen({ error, onRetry }: { error: AppError; onRet
       </Steps>
       <p className="text-sm">Rodar o script de novo é seguro: ele só cria o que falta e nunca apaga dados.</p>
       <div className="flex flex-col gap-2 pt-1 sm:flex-row">
-        <Button variant="primary" onClick={copySql} disabled={!sql}>
-          Copiar script SQL
-        </Button>
+        <CopySchemaButton />
         <a
           className={buttonClass("secondary")}
           href="https://supabase.com/dashboard"

@@ -550,7 +550,8 @@ export function deleteRow(table: TableName, id: string): Promise<void> {
   });
 }
 
-type SettingsPatch = Partial<Pick<Settings, "vault" | "warmup_defaults" | "brl_rates" | "prefs">>;
+// (`vault` fica de fora de propósito: o cofre só é gravado por replaceVault / rekeyVault / eraseVault)
+type SettingsPatch = Partial<Pick<Settings, "warmup_defaults" | "brl_rates" | "prefs">>;
 
 export function saveSettings(patch: SettingsPatch): Promise<void> {
   const userId = state.userId;
@@ -563,6 +564,160 @@ export function saveSettings(patch: SettingsPatch): Promise<void> {
       .single();
     if (error) throw error;
     setState({ settings: data as Settings });
+  });
+}
+
+const VAULT_CHANGED_MESSAGE =
+  "O cofre foi alterado em outro aparelho. Já atualizei os dados aqui — confira e tente de novo.";
+
+/** Lê de novo só a linha de configurações (ex.: antes de abrir o cofre, para usar a versão mais recente). */
+export async function reloadSettings(): Promise<Settings | null> {
+  const userId = state.userId;
+  if (!userId) throw new AppError("auth", "Sua sessão expirou. Entre novamente.");
+  let settings: Settings | null;
+  try {
+    settings = await fetchSettings();
+  } catch (err) {
+    throw toAppError(err);
+  }
+  if (state.userId === userId && settings) setState({ settings });
+  return settings;
+}
+
+/**
+ * Grava `settings.vault`, mas só se o cofre no banco ainda for o que este
+ * aparelho conhece: `expectedSalt` é o sal do cofre atual (ou null se o cofre
+ * ainda não existe). Evita que dois aparelhos criem cofres diferentes ao mesmo
+ * tempo, o que deixaria senhas impossíveis de abrir.
+ * É o único caminho para escrever em `settings.vault` (fora `rekeyVault` e `eraseVault`).
+ */
+export function replaceVault(next: Record<string, unknown> | null, expectedSalt: string | null): Promise<void> {
+  const userId = state.userId;
+  if (!userId) return Promise.reject(new AppError("auth", "Sua sessão expirou. Entre novamente."));
+  return tracked(async () => {
+    const base = getSupabase().from("settings").update({ vault: next }).eq("user_id", userId);
+    const guarded = expectedSalt === null ? base.is("vault", null) : base.eq("vault->>salt", expectedSalt);
+    const { data, error } = await guarded.select().maybeSingle();
+    if (error) throw error;
+    if (data) {
+      setState({ settings: data as Settings });
+      return;
+    }
+    // nada foi gravado: o cofre mudou (ou foi criado) em outro aparelho
+    const fresh = await fetchSettings();
+    if (fresh && state.userId === userId) setState({ settings: fresh });
+    throw new AppError("conflict", VAULT_CHANGED_MESSAGE);
+  });
+}
+
+/** Os blocos cifrados de todas as contas, lidos direto do servidor (para a troca da senha-mestra). */
+export async function fetchSecretBlobs(): Promise<Array<{ id: string; secrets_enc: string }>> {
+  const rows: Array<{ id: string; secrets_enc: string }> = [];
+  // em páginas: a API devolve no máximo 1000 linhas por vez, e nenhuma conta pode ficar de fora
+  for (;;) {
+    const { data, error } = await getSupabase()
+      .from("accounts")
+      .select("id, secrets_enc")
+      .not("secrets_enc", "is", null)
+      .order("id", { ascending: true })
+      .range(rows.length, rows.length + 999);
+    if (error) throw toAppError(error);
+    const page = (data ?? []) as Array<{ id: string; secrets_enc: string }>;
+    rows.push(...page);
+    if (page.length < 1000) return rows;
+  }
+}
+
+/** Número da estrutura do banco (função `cda_schema_version`). 1 = script antigo, sem a função. */
+export async function schemaVersion(): Promise<number> {
+  const { data, error } = await getSupabase().rpc("cda_schema_version");
+  if (error) {
+    if (isMissingFunction(error)) return 1;
+    throw toAppError(error);
+  }
+  return typeof data === "number" ? data : 1;
+}
+
+function isMissingFunction(error: { code?: string; message?: string }): boolean {
+  return error.code === "PGRST202" || error.code === "42883" || /could not find the function/i.test(error.message ?? "");
+}
+
+/** O banco ainda não tem a função de trocar a senha-mestra (falta rodar o script SQL atualizado). */
+export const REKEY_UNAVAILABLE = "rekey_unavailable";
+
+/**
+ * Troca da senha-mestra, de uma vez só (função `cda_vault_rekey` do banco): a
+ * nova configuração do cofre e as senhas de todas as contas, já recifradas.
+ * Ou grava tudo, ou não grava nada.
+ */
+export function rekeyVault(
+  expectedSalt: string,
+  nextVault: Record<string, unknown>,
+  blobs: Record<string, { old: string; new: string }>,
+): Promise<void> {
+  const userId = state.userId;
+  if (!userId) return Promise.reject(new AppError("auth", "Sua sessão expirou. Entre novamente."));
+  return tracked(async () => {
+    const { error } = await getSupabase().rpc("cda_vault_rekey", {
+      expected_salt: expectedSalt,
+      new_vault: nextVault,
+      new_secrets: blobs,
+    });
+    if (error) {
+      const message = error.message ?? "";
+      if (isMissingFunction(error)) {
+        throw new AppError(
+          "schema",
+          "Para trocar a senha-mestra é preciso atualizar o banco de dados uma vez (o script SQL mudou).",
+          REKEY_UNAVAILABLE,
+          message,
+        );
+      }
+      if (message.includes("cda_vault_changed")) throw new AppError("conflict", VAULT_CHANGED_MESSAGE);
+      if (message.includes("cda_vault_secrets_changed")) {
+        throw new AppError(
+          "conflict",
+          "As senhas de alguma conta mudaram em outro aparelho enquanto a troca era preparada. Nada foi alterado: tente de novo.",
+        );
+      }
+      throw error;
+    }
+    await reloadVaultData(userId);
+  });
+}
+
+/** Depois de uma mudança feita de uma vez no banco: traz de volta as configurações e as contas. */
+async function reloadVaultData(userId: string): Promise<void> {
+  const [settings, accounts] = await Promise.all([fetchSettings(), fetchAll("accounts")]);
+  if (state.userId !== userId) return;
+  setState({ accounts: accounts.sort(SORTERS.accounts), ...(settings ? { settings } : {}) });
+}
+
+/**
+ * Apaga o cofre: remove as senhas cifradas de todas as contas e a configuração
+ * do cofre. Usado só quando a senha-mestra foi perdida. Não tem volta.
+ * `expectedSalt` é o cofre que a tela estava mostrando: se ele mudou em outro
+ * aparelho (ex.: a senha-mestra foi trocada lá), nada é apagado.
+ */
+export function eraseVault(expectedSalt: string | null): Promise<void> {
+  const userId = state.userId;
+  if (!userId) return Promise.reject(new AppError("auth", "Sua sessão expirou. Entre novamente."));
+  return tracked(async () => {
+    const supabase = getSupabase();
+    const current = await fetchSettings();
+    const salt = (current?.vault as { salt?: unknown } | null)?.salt;
+    if ((typeof salt === "string" ? salt : null) !== expectedSalt) {
+      if (current && state.userId === userId) setState({ settings: current });
+      throw new AppError(
+        "conflict",
+        "O cofre mudou em outro aparelho (a senha-mestra pode ter sido trocada lá). Nada foi apagado: confira antes de tentar de novo.",
+      );
+    }
+    const cleared = await supabase.from("accounts").update({ secrets_enc: null }).not("secrets_enc", "is", null);
+    if (cleared.error) throw cleared.error;
+    const { error } = await supabase.from("settings").update({ vault: null }).eq("user_id", userId);
+    if (error) throw error;
+    await reloadVaultData(userId);
   });
 }
 

@@ -381,7 +381,8 @@ export function AccountForm({ avatar, account, initialStatus, onClose, onSaved }
         ) : null}
 
         <p className="text-xs leading-relaxed text-muted">
-          Senhas e códigos de backup entram na etapa do cofre (criptografados com a sua senha-mestra).
+          As senhas e os códigos de backup ficam no cofre: depois de salvar, abra “Senhas e códigos” na aba Conta
+          atual.
         </p>
       </FormModal>
 

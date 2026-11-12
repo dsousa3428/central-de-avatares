@@ -4,7 +4,7 @@
 //   node dev/e2e/botoes.cjs            (confere em 320, 360 e 390 px)
 //   node dev/e2e/botoes.cjs 375        (só uma largura)
 const { chromium } = require('playwright');
-const { BASE, USER, SHOTS, resetData } = require('./helpers.cjs');
+const { BASE, USER, SHOTS, psql, resetData } = require('./helpers.cjs');
 const OUT = SHOTS + '/botoes-';
 const WIDTHS = process.argv[2] ? [Number(process.argv[2])] : [320, 360, 390];
 
@@ -121,6 +121,49 @@ async function scanWidth(WIDTH) {
   await scan('padrão de aquecimento');
   await p.screenshot({ path: OUT + `${WIDTH}-padrao.png` });
   await close();
+
+  // Cofre de senhas: criar, configurações com o cofre aberto, trocar a senha-mestra
+  const MASTER = 'frase mestra só para o teste de telas';
+  const LONG = 'SenhaMuitoCompridaSemNenhumEspaco'.repeat(4);
+  await p.getByRole('button', { name: 'Criar senha-mestra' }).click();
+  await scan('criar senha-mestra');
+  await p.screenshot({ path: OUT + `${WIDTH}-criar-cofre.png` });
+  await dialog().getByLabel('Senha-mestra', { exact: true }).fill(MASTER);
+  await dialog().getByLabel('Repita a senha-mestra', { exact: true }).fill(MASTER);
+  await dialog().getByRole('checkbox').check();
+  await dialog().getByRole('button', { name: 'Criar cofre', exact: true }).click();
+  await p.waitForFunction(() => !document.querySelector('dialog[open]'), null, { timeout: 20000 });
+  await p.getByText('Aberto neste aparelho.').waitFor();
+  await scan('Configurações · cofre aberto');
+  await p.screenshot({ path: OUT + `${WIDTH}-config-cofre.png`, fullPage: true });
+  await p.getByRole('button', { name: 'Trocar senha-mestra' }).click();
+  await scan('trocar senha-mestra'); await close();
+
+  // Senhas de uma conta: trancado, destrancar, formulário e senhas compridas à mostra
+  const avatarId = psql("select id from public.avatars where name = 'Fra'' Salvio'");
+  await p.goto(`${BASE}/avatar?id=${avatarId}&aba=conta`);
+  await p.getByText('Cofre trancado').waitFor({ timeout: 30000 });
+  await scan('conta · cofre trancado');
+  await p.getByRole('button', { name: 'Destrancar' }).click();
+  await scan('destrancar o cofre');
+  await dialog().getByLabel('Senha-mestra', { exact: true }).fill(MASTER);
+  await dialog().getByRole('button', { name: 'Destrancar', exact: true }).click();
+  await p.waitForFunction(() => !document.querySelector('dialog[open]'), null, { timeout: 20000 });
+  await p.getByRole('button', { name: 'Adicionar senhas' }).click();
+  await dialog().getByLabel('Senha do Instagram', { exact: true }).fill(LONG);
+  await dialog().getByLabel('Senha do e-mail', { exact: true }).fill(LONG);
+  await dialog().getByLabel('E-mail de recuperação', { exact: true }).fill(`${LONG}@exemplo.com`);
+  await dialog().getByLabel('Códigos de backup / 2FA', { exact: true }).fill(`${LONG}\n${LONG}`);
+  await dialog().getByRole('button', { name: 'Mostrar a senha do Instagram' }).click();
+  await scan('formulário de senhas');
+  await p.screenshot({ path: OUT + `${WIDTH}-senhas-form.png` });
+  await dialog().getByRole('button', { name: 'Salvar', exact: true }).click();
+  await p.waitForFunction(() => !document.querySelector('dialog[open]'), null, { timeout: 20000 });
+  for (const what of ['a senha do Instagram', 'a senha do e-mail', 'o e-mail de recuperação', 'os códigos de backup']) {
+    await p.getByRole('button', { name: `Mostrar ${what}` }).click();
+  }
+  await scan('conta · senhas compridas à mostra');
+  await p.screenshot({ path: OUT + `${WIDTH}-senhas-a-mostra.png`, fullPage: true });
   await browser.close();
   resetData();
   return bad.map((line) => `${WIDTH}px · ${line}`);

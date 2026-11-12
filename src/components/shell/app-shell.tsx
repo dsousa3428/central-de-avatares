@@ -3,13 +3,16 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Ellipsis, LogOut } from "lucide-react";
+import { Ellipsis, LockKeyhole, LogOut } from "lucide-react";
 import { signOut, useAuth } from "@/lib/auth";
 import { cn } from "@/lib/format";
 import { getStore, loadAll, refreshIfStale } from "@/lib/store";
 import { isSupabaseConfigured } from "@/lib/supabase";
+import { lockVault } from "@/lib/vault";
 import { Logo } from "@/components/logo";
 import { Modal } from "@/components/ui/modal";
+import { useToast } from "@/components/ui/toast";
+import { useVault } from "@/components/vault/vault-provider";
 import { isActive, NAV_ITEMS } from "./nav-items";
 import { usePanelPhase } from "./panel-phase";
 
@@ -71,6 +74,39 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   );
 }
 
+/** "Trancar cofre": só aparece enquanto o cofre de senhas está aberto. */
+function LockVaultButton({
+  className,
+  iconClass,
+  onDone,
+  listItem,
+}: {
+  className: string;
+  iconClass: string;
+  onDone?: () => void;
+  /** Embrulha o botão num <li> (para listas de menu). */
+  listItem?: boolean;
+}) {
+  const vault = useVault();
+  const toast = useToast();
+  if (!vault.unlocked) return null;
+  const button = (
+    <button
+      type="button"
+      onClick={() => {
+        lockVault({ everywhere: true });
+        toast.info("Cofre trancado");
+        onDone?.();
+      }}
+      className={className}
+    >
+      <LockKeyhole className={iconClass} aria-hidden />
+      Trancar cofre
+    </button>
+  );
+  return listItem ? <li>{button}</li> : button;
+}
+
 function Sidebar({ email }: { email: string | null }) {
   const pathname = usePathname();
   return (
@@ -105,6 +141,10 @@ function Sidebar({ email }: { email: string | null }) {
       </nav>
       <div className="border-t border-line p-3">
         {email ? <p className="truncate px-3 pb-2 text-xs text-muted">{email}</p> : null}
+        <LockVaultButton
+          iconClass="size-4"
+          className="flex h-10 w-full items-center gap-3 rounded-xl px-3 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        />
         <button
           type="button"
           onClick={() => void signOut()}
@@ -198,6 +238,12 @@ function BottomNav() {
               </li>
             );
           })}
+          <LockVaultButton
+            listItem
+            iconClass="size-5"
+            onDone={() => setMoreOpen(false)}
+            className="flex h-12 w-full items-center gap-3 rounded-xl px-3 text-[15px] font-medium transition-colors hover:bg-surface-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          />
           <li>
             <button
               type="button"
