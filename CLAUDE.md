@@ -30,7 +30,7 @@ Painel privado, de um único usuário, para organizar contas de Instagram de ava
 - `supabase/schema.sql` é a única fonte: **idempotente**, sem `drop`, nunca apaga dados. Para mudar a estrutura, acrescente no fim do arquivo (`alter table … add column if not exists …`) — o usuário roda o arquivo inteiro de novo (a tela "Falta preparar o banco" tem o botão **Copiar script SQL**, servido de `/schema.sql`).
 - Toda tabela tem `user_id default auth.uid()`, RLS ligado e a política `dono_acessa`. Ao criar tabela nova, inclua o nome na lista do bloco `do $$ … $$` no fim do script.
 - As tabelas das etapas futuras **já existem**: `warmups` (dias em JSONB: `{n, date, use, minutes, task, done, done_at}`), `weekly_sales` (única por avatar + semana; `brl_rate` opcional), `activity_log`, `settings` (`vault`, `warmup_defaults`, `brl_rates`, `prefs`). `accounts.secrets_enc` guardará um único bloco cifrado por conta (etapa c); `accounts.checklist` é o checklist de reposição (etapa e).
-- Exemplos: linhas com `is_example = true` (`src/lib/examples.ts`). Ao acrescentar dados de exemplo numa etapa, aumente `EXAMPLES_VERSION`. `deleteExamples()` nunca apaga dados do usuário: exemplo com conteúdo real dentro só perde a marca de exemplo.
+- Exemplos: linhas com `is_example = true` (`src/lib/examples.ts`). Ao acrescentar dados de exemplo numa etapa, aumente `EXAMPLES_VERSION`. `deleteExamples()` nunca apaga dados do usuário: exemplo com conteúdo real dentro só perde a marca de exemplo. `keepExampleAvatar()` / `keepExampleCountry()` (botão "Ficar com este avatar / país") transformam um exemplo em dado do usuário — importante porque o Fra' Salvio é um avatar real dele.
 
 ## Pegadinhas do Next.js 16 que já encontramos
 

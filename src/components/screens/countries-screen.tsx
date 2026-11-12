@@ -11,7 +11,7 @@ import { useStore, type Db } from "@/lib/store";
 import type { Avatar, Country } from "@/lib/types";
 import { setSelectedCountry, useSelectedCountry } from "@/lib/ui-state";
 import { AvatarForm } from "@/components/avatar/avatar-form";
-import { ExamplesNotice } from "@/components/common/examples-notice";
+import { KeepExample } from "@/components/common/keep-example";
 import { CountryForm } from "@/components/countries/country-form";
 import { PageHeader } from "@/components/shell/page-header";
 import { AvatarPhoto } from "@/components/ui/avatar-photo";
@@ -58,8 +58,6 @@ export function CountriesScreen() {
           </Button>
         }
       />
-      <ExamplesNotice />
-
       {!country ? (
         <Card>
           <EmptyState
@@ -77,6 +75,7 @@ export function CountriesScreen() {
       ) : (
         <>
           <Tabs items={tabs} value={country.id} onChange={setSelectedCountry} ariaLabel="Países" className="mb-4" />
+          {country.is_example ? <KeepExample country={country} /> : null}
           <CountryPanel
             db={db}
             country={country}

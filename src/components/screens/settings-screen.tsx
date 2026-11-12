@@ -39,17 +39,24 @@ export function SettingsScreen() {
     examples.profiles ? plural(examples.profiles, "perfil anti-detect", "perfis anti-detect") : null,
   ].filter(Boolean);
 
+  const exampleNames = [
+    ...db.countries.filter((c) => c.is_example).map((c) => c.name),
+    ...db.avatars.filter((a) => a.is_example).map((a) => a.name),
+  ];
+
   async function removeExamples() {
     const ok = await confirm({
       title: "Apagar os dados de exemplo?",
       message: (
         <>
           <p>
-            Serão apagados: <strong>{summary.join(", ")}</strong> — e tudo que pertence a eles (histórico, links, kit).
+            Serão apagados: <strong>{summary.join(", ")}</strong> — com tudo que pertence a eles (histórico, links,
+            kit), <strong>inclusive o que você tiver alterado dentro deles</strong>.
           </p>
+          {exampleNames.length > 0 ? <p className="mt-2">Exemplos: {exampleNames.join(", ")}.</p> : null}
           <p className="mt-2">
-            O que você mesmo cadastrou continua intacto. Se você colocou algo seu dentro de um exemplo, esse exemplo é
-            mantido e apenas deixa de ser marcado como exemplo.
+            O que você cadastrou do zero continua intacto. Quer manter algum exemplo como seu? Cancele, abra o avatar
+            ou o país e toque em <strong>“Ficar com este avatar / país”</strong>.
           </p>
         </>
       ),

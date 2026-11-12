@@ -84,7 +84,7 @@ export async function seedExamples(): Promise<void> {
       "cucina tradizionale",
       "@erboristeria.esempio",
     ],
-    notes: "País de exemplo. Pode editar à vontade ou apagar em Configurações → Dados de exemplo.",
+    notes: "País de exemplo, para você conhecer o painel.",
     position: 0,
   });
 
@@ -323,4 +323,41 @@ export async function deleteExamples(): Promise<void> {
   const profilesInUse = await idsWhere("accounts", "profile_id", profileIds);
   await keepIds("antidetect_profiles", profileIds.filter((id) => profilesInUse.has(id)));
   await deleteIds("antidetect_profiles", profileIds.filter((id) => !profilesInUse.has(id)));
+}
+
+async function unmarkWhere(table: string, column: string, values: string[]): Promise<void> {
+  if (values.length === 0) return;
+  const { error } = await getSupabase().from(table).update({ is_example: false }).in(column, values);
+  if (error) throw toAppError(error);
+}
+
+/**
+ * "Ficar com este país": o país deixa de ser exemplo e não é mais apagado
+ * junto com os exemplos. (Os avatares de exemplo dentro dele continuam exemplos.)
+ */
+export async function keepExampleCountry(countryId: string): Promise<void> {
+  await unmarkWhere("countries", "id", [countryId]);
+}
+
+/**
+ * "Ficar com este avatar": o avatar, as contas dele (com histórico, aquecimento
+ * e vendas), o país e os celulares/perfis usados pelas contas deixam de ser
+ * exemplo. Nada é apagado nem alterado além da marca de exemplo.
+ */
+export async function keepExampleAvatar(db: Db, avatarId: string): Promise<void> {
+  const avatar = db.avatars.find((a) => a.id === avatarId);
+  if (!avatar) return;
+  const accounts = db.accounts.filter((a) => a.avatar_id === avatarId);
+  const accountIds = accounts.map((a) => a.id);
+  const phoneIds = [...new Set(accounts.map((a) => a.phone_id).filter((id): id is string => Boolean(id)))];
+  const profileIds = [...new Set(accounts.map((a) => a.profile_id).filter((id): id is string => Boolean(id)))];
+
+  await unmarkWhere("activity_log", "avatar_id", [avatarId]);
+  await unmarkWhere("weekly_sales", "avatar_id", [avatarId]);
+  await unmarkWhere("warmups", "account_id", accountIds);
+  await unmarkWhere("accounts", "avatar_id", [avatarId]);
+  await unmarkWhere("phones", "id", phoneIds);
+  await unmarkWhere("antidetect_profiles", "id", profileIds);
+  await unmarkWhere("countries", "id", [avatar.country_id]);
+  await unmarkWhere("avatars", "id", [avatarId]);
 }

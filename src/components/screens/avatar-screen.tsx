@@ -11,6 +11,7 @@ import { setSelectedCountry } from "@/lib/ui-state";
 import { AccountForm } from "@/components/avatar/account-form";
 import { AccountTab } from "@/components/avatar/account-tab";
 import { AvatarForm } from "@/components/avatar/avatar-form";
+import { KeepExample } from "@/components/common/keep-example";
 import { HistoryTab } from "@/components/avatar/history-tab";
 import { KitTab } from "@/components/avatar/kit-tab";
 import { LinksTab } from "@/components/avatar/links-tab";
@@ -146,6 +147,8 @@ function AvatarContent({ avatar, initialTab }: { avatar: Avatar; initialTab: str
           </Button>
         </div>
       </header>
+
+      {avatar.is_example ? <KeepExample avatar={avatar} /> : null}
 
       <Tabs items={tabs} value={tab} onChange={changeTab} ariaLabel="Seções do avatar" className="mb-4" />
 
