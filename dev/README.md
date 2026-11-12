@@ -9,7 +9,9 @@ Nada desta pasta vai para a Vercel. Ela existe para testar o painel de verdade (
 | `local.mjs` | Sobe/desliga um Supabase "de bolso" (Postgres + Auth + API) com Docker, aplica `supabase/schema.sql`, cria o usuário de teste e escreve o `.env.local`. |
 | `supabase-local/` | `docker-compose.yml`, scripts de inicialização do banco e o gateway que imita o endereço único do Supabase (`http://localhost:54321`). |
 | `e2e/etapa-a.cjs` | Teste de ponta a ponta da etapa (a), no tamanho de um celular. |
-| `e2e/extras.cjs` | Situações de exceção: banco sem tabelas e queda de internet ao salvar. |
+| `e2e/extras.cjs` | Situações de exceção: banco sem tabelas, queda de internet ao salvar e regras dos dados de exemplo. |
+| `e2e/robustez.cjs` | Dois aparelhos ao mesmo tempo, toques rápidos, falhas no meio de um salvamento, validações de digitação, sair em outra aba. |
+| `unit/format.test.mjs` | Testes rápidos das funções que interpretam números, links, @ e datas. |
 
 As chaves do ambiente local são geradas na hora e ficam em `supabase-local/.env` (ignorado pelo git).
 
@@ -37,6 +39,14 @@ node dev/e2e/etapa-a.cjs
 
 ```bash
 node dev/e2e/extras.cjs
+```
+
+```bash
+node dev/e2e/robustez.cjs
+```
+
+```bash
+node --test dev/unit/format.test.mjs
 ```
 
 Login de teste: `teste@exemplo.com` / `senha-de-teste-123`.

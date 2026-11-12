@@ -49,12 +49,14 @@ const restoreTable = () => {
   await page.getByRole("heading", { name: "Países", exact: true }).waitFor();
   await page.getByRole("link", { name: /Fra' Salvio/ }).click();
   await page.getByRole("tab", { name: /^Vídeos/ }).click();
+  await page.getByRole("heading", { name: "Vídeos para modelar" }).waitFor();
   await page.route("**/rest/v1/**", (route) => route.abort("internetdisconnected"));
   const before = await page.getByRole("button", { name: "Marcar como modelado" }).count();
   await page.getByRole("button", { name: "Marcar como modelado" }).first().click();
   await toast("Sem conexão com o servidor");
+  await page.waitForTimeout(300);
   const after = await page.getByRole("button", { name: "Marcar como modelado" }).count();
-  assert(before === after, "a mudança que não foi salva é desfeita na tela");
+  assert(before === 2 && after === 2, "a mudança que não foi salva é desfeita na tela");
   await page.getByRole("button", { name: "Adicionar", exact: true }).click();
   await dialog().getByLabel("Rótulo", { exact: true }).fill("Vídeo sem internet");
   await save();

@@ -51,7 +51,12 @@ export function VideosTab({ avatar }: { avatar: Avatar }) {
   async function toggle(video: ModelVideo) {
     const status: VideoStatus = video.status === "modelado" ? "a_modelar" : "modelado";
     try {
-      await updateRow("avatars", avatar.id, { model_videos: upsertById(videos, { ...video, status }) });
+      await updateRow(
+        "avatars",
+        avatar.id,
+        { model_videos: upsertById(videos, { ...video, status }) },
+        { optimistic: true },
+      );
     } catch (err) {
       toast.error(err);
     }

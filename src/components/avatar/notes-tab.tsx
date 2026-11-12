@@ -17,9 +17,10 @@ export function NotesTab({ avatar }: { avatar: Avatar }) {
   const [saving, setSaving] = useState(false);
 
   // Se as anotações mudaram por fora (ex.: editadas em outro aparelho) e não há
-  // nada digitado aqui por salvar, acompanha o texto novo.
+  // nada digitado aqui por salvar, acompanha o texto novo. O salvamento daqui só
+  // mexe em `saved` depois que o servidor confirma, então um erro nunca apaga o rascunho.
   if (saved !== baseline) {
-    if (text === baseline) setText(saved);
+    if ((clean(text) ?? "") === baseline) setText(saved);
     setBaseline(saved);
   }
 

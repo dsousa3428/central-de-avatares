@@ -191,12 +191,13 @@ async function fetchEverything(): Promise<Db> {
   };
 }
 
-let inFlight: Promise<void> | null = null;
+let inFlight: Promise<boolean> | null = null;
 let pendingWrites = 0;
 /** Conta as gravações concluídas, para descartar leituras que ficaram velhas. */
 let writeSeq = 0;
 
-async function runLoad(userId: string, background: boolean): Promise<void> {
+/** Lê tudo do servidor. Devolve true se os dados lidos foram para a tela. */
+async function runLoad(userId: string, background: boolean): Promise<boolean> {
   if (!background) {
     setState({ ...EMPTY, status: "loading", userId });
   }
@@ -222,43 +223,54 @@ async function runLoad(userId: string, background: boolean): Promise<void> {
       db = await fetchEverything();
     }
 
-    if (state.userId !== userId) return; // saiu ou trocou de usuário no meio
+    if (state.userId !== userId) return false; // saiu ou trocou de usuário no meio
     // não atropela uma gravação feita enquanto esta leitura estava a caminho
-    if (background && (pendingWrites > 0 || writeSeq !== seqAtStart)) return;
+    if (background && (pendingWrites > 0 || writeSeq !== seqAtStart)) return false;
     setState({ ...db, status: "ready", error: null, loadingMessage: null, loadedAt: Date.now() });
+    return true;
   } catch (err) {
-    if (state.userId !== userId) return;
-    if (background) return; // atualização silenciosa: mantém o que já está na tela
+    if (state.userId !== userId) return false;
+    if (background) return false; // atualização silenciosa: mantém o que já está na tela
     setState({ status: "error", error: toAppError(err), loadingMessage: null });
+    return false;
   }
 }
 
 /** Carrega tudo do zero (mostra a tela de carregamento). */
-export function loadAll(userId: string): Promise<void> {
-  if (inFlight && state.userId === userId) return inFlight;
+export async function loadAll(userId: string): Promise<void> {
+  if (inFlight && state.userId === userId) {
+    await inFlight;
+    return;
+  }
   const run = runLoad(userId, false).finally(() => {
     if (inFlight === run) inFlight = null;
   });
   inFlight = run;
-  return run;
+  await run;
 }
 
-/** Recarrega em segundo plano, sem piscar a tela. Sempre busca dados novos. */
+/**
+ * Recarrega em segundo plano, sem piscar a tela. Sempre busca dados novos; se
+ * uma gravação acontecer no meio da leitura, tenta mais algumas vezes.
+ */
 export async function refresh(): Promise<void> {
   const userId = state.userId;
-  if (!userId || state.status !== "ready") return;
-  // se já há uma leitura a caminho, espera ela terminar e faz outra em seguida
-  if (inFlight) await inFlight.catch(() => undefined);
-  if (state.userId !== userId || state.status !== "ready") return;
-  const run = runLoad(userId, true).finally(() => {
-    if (inFlight === run) inFlight = null;
-  });
-  inFlight = run;
-  return run;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (!userId || state.userId !== userId || state.status !== "ready") return;
+    // se já há uma leitura a caminho, espera ela terminar e faz outra em seguida
+    if (inFlight) await inFlight.catch(() => false);
+    if (state.userId !== userId || state.status !== "ready") return;
+    const run = runLoad(userId, true).finally(() => {
+      if (inFlight === run) inFlight = null;
+    });
+    inFlight = run;
+    if (await run) return;
+    await new Promise((resolve) => setTimeout(resolve, 400));
+  }
 }
 
 /** Recarrega em segundo plano se os dados estiverem "velhos" (ex.: ao voltar para a aba). */
-export function refreshIfStale(maxAgeMs = 60_000): void {
+export function refreshIfStale(maxAgeMs = 15_000): void {
   if (state.status !== "ready" || pendingWrites > 0 || inFlight) return;
   if (Date.now() - state.loadedAt < maxAgeMs) return;
   void refresh();
@@ -267,6 +279,7 @@ export function refreshIfStale(maxAgeMs = 60_000): void {
 /** Limpa a memória (ao sair da conta). */
 export function resetStore(): void {
   inFlight = null;
+  rowTxns.clear();
   setState({ ...EMPTY });
 }
 
@@ -314,42 +327,130 @@ function patchLocal<T extends TableName>(table: T, id: string, patch: Partial<Ta
   );
 }
 
+export interface UpdateOptions {
+  /**
+   * Mostra a mudança na tela antes da resposta do servidor. Use só em toques
+   * rápidos (marcar um item, trocar um status). Formulários não precisam: eles
+   * já mostram "salvando" e só fecham quando dá certo.
+   */
+  optimistic?: boolean;
+}
+
+const STALE_MESSAGE =
+  "Este item foi alterado em outro aparelho. Já atualizei os dados aqui — confira e tente de novo.";
+
+/** Gravações em andamento de uma mesma linha (feitas em fila, uma de cada vez). */
+interface RowTxn {
+  /** Último estado que sabemos estar gravado no servidor. */
+  confirmed: Record<string, unknown>;
+  /** Mudanças otimistas ainda sem resposta, na ordem em que foram feitas. */
+  optimistic: Array<Record<string, unknown>>;
+  /** Quantas gravações desta linha ainda não terminaram. */
+  pending: number;
+  /** A linha mudou em outro aparelho: as gravações que estavam na fila são canceladas. */
+  stale: boolean;
+  /** Fila: cada gravação espera a anterior terminar. Nunca rejeita. */
+  chain: Promise<void>;
+}
+
+const rowTxns = new Map<string, RowTxn>();
+
+/** Tela = último estado confirmado + mudanças otimistas que ainda aguardam resposta. */
+function showRow<T extends TableName>(table: T, id: string, txn: RowTxn) {
+  let row = txn.confirmed;
+  for (const patch of txn.optimistic) row = { ...row, ...patch };
+  patchLocal(table, id, row as Partial<Tables[T]>);
+}
+
 /**
- * Atualiza um registro. A tela muda na hora (otimista); se o servidor recusar,
- * o valor antigo volta e o erro é devolvido para quem chamou.
+ * Grava no servidor, mas só se a linha ainda estiver na versão que conhecemos
+ * (compara o updated_at). Assim uma aba desatualizada nunca apaga, sem querer,
+ * algo que foi salvo em outro aparelho.
  */
-export function updateRow<T extends TableName>(table: T, id: string, patch: RowPatch<T>): Promise<void> {
-  const before = listOf(table).find((row) => row.id === id);
-  if (!before) {
+async function writeRow(
+  table: TableName,
+  id: string,
+  values: Record<string, unknown>,
+  txn: RowTxn,
+): Promise<Record<string, unknown>> {
+  const supabase = getSupabase();
+  let query = supabase.from(table).update(values).eq("id", id);
+  const knownVersion = txn.confirmed.updated_at;
+  if (typeof knownVersion === "string") query = query.eq("updated_at", knownVersion);
+
+  const { data, error } = await query.select().maybeSingle();
+  if (error) throw error;
+  if (data) return data as Record<string, unknown>;
+
+  // Nenhuma linha gravada: ou o registro foi apagado, ou mudou em outro aparelho.
+  const { data: fresh, error: readError } = await supabase.from(table).select().eq("id", id).maybeSingle();
+  if (readError) throw readError;
+  if (!fresh) throw new AppError("unknown", "Este registro não existe mais. Atualize a página.");
+  txn.confirmed = fresh as Record<string, unknown>;
+  txn.stale = true;
+  throw new AppError("conflict", STALE_MESSAGE);
+}
+
+/**
+ * Atualiza um registro. Por padrão a tela só muda quando o servidor confirma.
+ * Com `optimistic: true` a tela muda na hora e, se o servidor recusar, volta
+ * para o último estado confirmado. Em qualquer caso o erro é devolvido para
+ * quem chamou.
+ */
+export function updateRow<T extends TableName>(
+  table: T,
+  id: string,
+  patch: RowPatch<T>,
+  options: UpdateOptions = {},
+): Promise<void> {
+  const current = listOf(table).find((row) => row.id === id);
+  if (!current) {
     return Promise.reject(
       new AppError("unknown", "Este registro não foi encontrado. Atualize a página e tente de novo."),
     );
   }
-  const previous: Record<string, unknown> = {};
-  for (const key of Object.keys(patch)) {
-    previous[key] = (before as unknown as Record<string, unknown>)[key];
-  }
-  patchLocal(table, id, patch as Partial<Tables[T]>);
 
-  return tracked(async () => {
+  const key = `${table}:${id}`;
+  let txn = rowTxns.get(key);
+  if (!txn) {
+    txn = {
+      confirmed: { ...(current as unknown as Record<string, unknown>) },
+      optimistic: [],
+      pending: 0,
+      stale: false,
+      chain: Promise.resolve(),
+    };
+    rowTxns.set(key, txn);
+  }
+  const t = txn;
+  const values = patch as Record<string, unknown>;
+  const previous = t.chain;
+
+  t.pending += 1;
+  if (options.optimistic) {
+    t.optimistic.push(values);
+    showRow(table, id, t);
+  }
+
+  const result = tracked(async () => {
+    await previous; // espera a gravação anterior desta mesma linha
     try {
-      const { data, error } = await getSupabase()
-        .from(table)
-        .update(patch as Record<string, unknown>)
-        .eq("id", id)
-        .select("updated_at")
-        .maybeSingle();
-      if (error) throw error;
-      if (!data) {
-        throw new AppError("unknown", "Este registro não existe mais. Atualize a página.");
-      }
-      const updatedAt = (data as { updated_at?: string }).updated_at;
-      if (updatedAt) patchLocal(table, id, { updated_at: updatedAt } as unknown as Partial<Tables[T]>);
-    } catch (err) {
-      patchLocal(table, id, previous as Partial<Tables[T]>);
-      throw err;
+      if (t.stale) throw new AppError("conflict", STALE_MESSAGE);
+      t.confirmed = await writeRow(table, id, values, t);
+    } finally {
+      const index = t.optimistic.indexOf(values);
+      if (index >= 0) t.optimistic.splice(index, 1);
+      t.pending -= 1;
+      if (t.pending === 0 && rowTxns.get(key) === t) rowTxns.delete(key);
+      showRow(table, id, t);
     }
   });
+
+  t.chain = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
 }
 
 /** Remove da memória um registro e tudo que o banco apaga junto (cascata). */

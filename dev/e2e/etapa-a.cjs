@@ -331,10 +331,11 @@ const { BASE, USER, psql, resetData, ok, section, assert, openPhone, finish, fai
   // ---------------------------------------------------------------
   section('Sair');
   await page.getByRole('link', { name: 'Config' }).click();
-  await page.getByRole('button', { name: 'Sair', exact: true }).click();
+  // "Sair" recarrega a página inteira de propósito: espera esse recarregamento terminar
+  await Promise.all([page.waitForEvent('load'), page.getByRole('button', { name: 'Sair', exact: true }).click()]);
   await page.waitForURL('**/login');
   await page.getByRole('heading', { name: 'Central de Avatares' }).waitFor();
-  await page.goto(BASE + '/');
+  await page.goto(BASE + '/', { waitUntil: 'commit' }); // o painel redireciona sozinho para /login
   await page.waitForURL('**/login');
   ok('depois de sair, o painel volta a pedir login');
 

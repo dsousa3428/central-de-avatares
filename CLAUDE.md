@@ -16,8 +16,12 @@ Painel privado, de um único usuário, para organizar contas de Instagram de ava
 
 - **Next.js 16 (App Router) + React 19 + Tailwind v4**, `cacheComponents: true`. Todas as rotas são **estáticas**; não há código de servidor nosso.
 - **Dados só no navegador**, via `@supabase/supabase-js` (sessão no localStorage). A segurança é o **RLS** do banco.
-- `src/lib/store.ts`: carrega **todas** as tabelas do usuário de uma vez e mantém em memória (`useStore()`). Gravações: `insertRow`, `updateRow` (otimista, com rollback), `deleteRow` (com cascata local), `saveSettings`, `logActivity`. `refresh()` recarrega em segundo plano; `refreshIfStale()` roda ao voltar para a aba.
-- Rotas: `/` (Hoje), `/paises`, `/avatar?id=…&aba=…`, `/vendas`, `/infraestrutura`, `/configuracoes`, `/login`. O avatar usa **query string** (não segmento dinâmico) para a rota continuar estática.
+- `src/lib/store.ts`: carrega **todas** as tabelas do usuário de uma vez e mantém em memória (`useStore()`). Gravações: `insertRow`, `updateRow`, `deleteRow` (com cascata local), `saveSettings`, `logActivity`. `refresh()` recarrega em segundo plano; `refreshIfStale()` roda ao voltar para a aba.
+- Regras do `updateRow` (não quebre):
+  - Por padrão a tela **só muda quando o servidor confirma** — é o certo para formulários (`FormModal` já mostra "salvando" e mantém a janela aberta com o erro).
+  - `{ optimistic: true }` só para toques rápidos (marcar vídeo, pausar avatar, trocar status no seletor). Se falhar, a tela volta ao último estado confirmado.
+  - Gravações da mesma linha entram em **fila** e cada uma confere a versão (`updated_at`): se a linha mudou em outro aparelho, nada é gravado, a linha é recarregada e o erro "alterado em outro aparelho" sobe para a tela. Isso protege as listas JSONB (que são regravadas inteiras) contra abas desatualizadas.
+- Rotas: `/` (Hoje), `/paises`, `/avatar?id=…&aba=…`, `/vendas`, `/infraestrutura`, `/configuracoes`, `/login`. O avatar usa **query string** (não segmento dinâmico) para a rota continuar estática. A aba aberta do avatar **vem sempre do endereço** (`?aba=`), trocada com `history.replaceState`.
 - `AppShell` (layout de `(painel)`) confere login, dispara o carregamento e desenha a navegação. Cada página embrulha a tela em `<ScreenGate>`, que só mostra o conteúdo quando login e dados estão prontos (senão: carregando / "Falta conectar o Supabase" / "Falta preparar o banco").
 - Telas ficam em `src/components/screens/*`, formulários e seções em `src/components/{avatar,countries,infra,common}/*`, peças visuais em `src/components/ui/*`.
 - Listas pequenas do avatar (links extras, vídeos, perfis de exemplo, kit) são **JSONB** na própria linha do avatar; edite com `ItemFormModal` + `upsertById`/`removeById`.
@@ -39,10 +43,12 @@ Painel privado, de um único usuário, para organizar contas de Instagram de ava
 - O layout precisa **sempre renderizar `children`**; esconder a página inteira no layout dispara o erro de "instant navigation" no modo dev. Por isso existe o `ScreenGate` por página.
 - `useSearchParams` precisa de `<Suspense>` em volta (ver `app/(painel)/avatar/page.tsx`).
 - Logout usa `window.location.href` de propósito (limpa toda a memória).
+- A tela de login também fica guardada depois de entrar: por isso o formulário limpa a senha e o estado de "entrando" assim que o login dá certo.
+- Texto longo: `body` usa `overflow-wrap: anywhere`. Não use a classe `break-words` (ela anula essa regra dentro de flex/grid).
 
 ## Testes
 
-Veja `dev/README.md`. Resumo: `node dev/local.mjs up` → `npm run build && npm start` → `node dev/e2e/etapa-a.cjs` e `node dev/e2e/extras.cjs`. Antes de entregar uma etapa: `npm run typecheck`, `npm run lint`, build e os testes, mais uma conferida visual (celular 390px e computador, claro e escuro).
+Veja `dev/README.md`. Resumo: `node dev/local.mjs up` → `npm run build && npm start` → `node dev/e2e/etapa-a.cjs`, `node dev/e2e/extras.cjs` e `node dev/e2e/robustez.cjs`, mais `node --test dev/unit/format.test.mjs`. Antes de entregar uma etapa: `npm run typecheck`, `npm run lint`, build e os testes (em produção **e** com `npm run dev`, que é mais rigoroso), mais uma conferida visual (celular 360–390px e computador, claro e escuro, e com textos bem longos).
 
 ## Publicação
 

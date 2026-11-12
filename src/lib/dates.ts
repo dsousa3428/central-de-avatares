@@ -21,9 +21,12 @@ export function parseISODate(iso: string): Date {
   return new Date(y, (m || 1) - 1, d || 1);
 }
 
+/** Data existente de verdade ("2026-02-31" e anos como "0026" não passam). */
 export function isValidISODate(iso: string | null | undefined): iso is string {
   if (!iso || !/^\d{4}-\d{2}-\d{2}/.test(iso)) return false;
-  return !Number.isNaN(parseISODate(iso).getTime());
+  const day = iso.slice(0, 10);
+  const date = parseISODate(day);
+  return !Number.isNaN(date.getTime()) && toISODate(date) === day;
 }
 
 export function addDays(iso: string, days: number): string {

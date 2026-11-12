@@ -44,9 +44,13 @@ export function LoginScreen() {
         password,
       });
       if (signInError) throw signInError;
-      // o redirecionamento acontece no efeito acima, quando a sessão chega
+      // O redirecionamento acontece no efeito acima, quando a sessão chega.
+      // Esta tela continua guardada (escondida) pelo navegador: não deixa a senha nela.
+      setPassword("");
+      setShowPassword(false);
     } catch (err) {
       setError(loginErrorMessage(err));
+    } finally {
       setBusy(false);
     }
   }

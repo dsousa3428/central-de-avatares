@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { TriangleAlert } from "lucide-react";
 import { formatDate, isValidISODate, todayISO } from "@/lib/dates";
-import { clean, normalizeHandle, parseInteger } from "@/lib/format";
+import { clean, normalizeHandle, parseCount } from "@/lib/format";
 import { FALL_REASONS } from "@/lib/reference";
 import {
   accountsOf,
@@ -130,14 +130,18 @@ export function AccountForm({ avatar, account, initialStatus, onClose, onSaved }
     if (siblings.some((a) => a.id !== selfId && a.generation === gen)) {
       invalid(`Este avatar já tem uma conta na ${generationLabel(gen)}. Use outro número.`);
     }
-    if (!isValidISODate(createdOn)) invalid("Informe a data de criação da conta.");
+    const today = todayISO();
+    if (!isValidISODate(createdOn)) invalid("Informe uma data de criação válida.");
+    if (createdOn > today) invalid("A data de criação não pode ser no futuro.");
+    if (createdOn < "2010-01-01") invalid("Confira o ano da data de criação.");
     if (fallen) {
-      if (!isValidISODate(fellOn)) invalid("Informe a data em que a conta caiu.");
+      if (!isValidISODate(fellOn)) invalid("Informe uma data válida para a queda da conta.");
+      if (fellOn > today) invalid("A data da queda não pode ser no futuro.");
       if (fellOn < createdOn) invalid("A data da queda não pode ser anterior à data de criação.");
     }
-    const followersNumber = followers.trim() ? parseInteger(followers) : null;
-    if (followers.trim() && (followersNumber === null || followersNumber < 0)) {
-      invalid("O número de seguidores não parece válido.");
+    const followersNumber = followers.trim() ? parseCount(followers) : null;
+    if (followers.trim() && followersNumber === null) {
+      invalid("Não entendi o número de seguidores. Exemplos: 1840, 1.840 ou 12,3 mil.");
     }
 
     const values = {

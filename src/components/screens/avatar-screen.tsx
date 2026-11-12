@@ -58,16 +58,18 @@ export function AvatarScreen() {
     );
   }
 
-  // key: ao trocar de avatar, a tela recomeça do zero (aba inicial, formulários fechados)
-  return <AvatarContent key={avatar.id} avatar={avatar} initialTab={params.get("aba")} />;
+  // A aba aberta vem sempre do endereço (?aba=…): um link para "Conta atual" cai na aba certa
+  // mesmo quando esta tela já estava guardada em outra aba.
+  const aba = params.get("aba");
+  // key: ao trocar de avatar, a tela recomeça do zero (formulários fechados)
+  return <AvatarContent key={avatar.id} avatar={avatar} tab={isTab(aba) ? aba : "geral"} />;
 }
 
-function AvatarContent({ avatar, initialTab }: { avatar: Avatar; initialTab: string | null }) {
+function AvatarContent({ avatar, tab }: { avatar: Avatar; tab: TabValue }) {
   const db = useStore();
   const router = useRouter();
   const toast = useToast();
   const confirm = useConfirm();
-  const [tab, setTab] = useState<TabValue>(isTab(initialTab) ? initialTab : "geral");
   const [editing, setEditing] = useState(false);
   const [creatingAccount, setCreatingAccount] = useState(false);
 
@@ -77,8 +79,7 @@ function AvatarContent({ avatar, initialTab }: { avatar: Avatar; initialTab: str
   const pendingVideos = (avatar.model_videos ?? []).filter((v) => v.status === "a_modelar").length;
 
   function changeTab(next: TabValue) {
-    setTab(next);
-    // guarda a aba no endereço, para o "voltar" e os favoritos caírem no lugar certo
+    // troca a aba mudando o endereço; o Next.js avisa esta tela e ela se redesenha
     const url = `/avatar?id=${avatar.id}${next === "geral" ? "" : `&aba=${next}`}`;
     window.history.replaceState(null, "", url);
   }

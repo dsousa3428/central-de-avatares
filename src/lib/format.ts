@@ -17,11 +17,14 @@ export function clean(value: string | null | undefined): string | null {
   return v === "" ? null : v;
 }
 
-/** "@Fra.Salvio " -> "fra.salvio" */
+/**
+ * Deixa só o nome da conta, em minúsculas:
+ * "@Fra.Salvio", "instagram.com/fra.salvio/" e "https://www.instagram.com/fra.salvio?x=1" -> "fra.salvio"
+ */
 export function normalizeHandle(value: string): string {
   return value
     .trim()
-    .replace(/^https?:\/\/(www\.)?instagram\.com\//i, "")
+    .replace(/^(https?:\/\/)?([a-z0-9-]+\.)*instagram\.com\//i, "")
     .replace(/^@+/, "")
     .replace(/[/?#].*$/, "")
     .replace(/\s+/g, "")
@@ -32,7 +35,8 @@ export function normalizeHandle(value: string): string {
 export function normalizeUrl(value: string | null | undefined): string | null {
   const v = clean(value);
   if (!v) return null;
-  if (/^[a-z][a-z0-9+.-]*:/i.test(v)) return v;
+  // já tem protocolo ("https://…", "tg://…") ou é um link de e-mail/telefone
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(v) || /^(mailto|tel):/i.test(v)) return v;
   return `https://${v}`;
 }
 
@@ -82,28 +86,50 @@ export function formatNumber(value: number | null | undefined): string {
   return new Intl.NumberFormat("pt-BR").format(value);
 }
 
-/** "1.234,50" ou "1234.5" -> 1234.5 ; vazio/inválido -> null */
+/**
+ * Valor em dinheiro digitado à mão -> número. Vazio ou inválido -> null.
+ * "27,90" -> 27.9 · "1.234,50" -> 1234.5 · "1,234.50" -> 1234.5 · "1.234" -> 1234 · "0.5" -> 0.5
+ */
 export function parseDecimal(value: string): number | null {
   const v = value.trim().replace(/\s/g, "");
-  if (!v) return null;
-  let normalized = v;
-  if (v.includes(",")) {
-    // formato brasileiro: ponto = milhar, vírgula = decimal
-    normalized = v.replace(/\./g, "").replace(",", ".");
-  } else if (/^-?\d{1,3}(\.\d{3})+$/.test(v)) {
-    // "1.234" ou "12.500.000": pontos são separadores de milhar
+  if (!/^-?\d[\d.,]*$/.test(v)) return null;
+  const lastComma = v.lastIndexOf(",");
+  const lastDot = v.lastIndexOf(".");
+  let normalized: string;
+  if (lastComma >= 0 && lastDot >= 0) {
+    // vírgula e ponto juntos: o que vem por último é o separador decimal
+    normalized = lastComma > lastDot ? v.replace(/\./g, "").replace(",", ".") : v.replace(/,/g, "");
+  } else if (lastComma >= 0) {
+    // só vírgula: decimal, no padrão brasileiro (e só pode haver uma)
+    if (v.indexOf(",") !== lastComma) return null;
+    normalized = v.replace(",", ".");
+  } else if (/^-?[1-9]\d{0,2}(\.\d{3})+$/.test(v)) {
+    // "1.234" ou "12.500.000": pontos separando milhares
     normalized = v.replace(/\./g, "");
+  } else {
+    if (v.indexOf(".") !== lastDot) return null;
+    normalized = v;
   }
   const n = Number(normalized);
   return Number.isFinite(n) ? n : null;
 }
 
-/** "1.840" ou "1840" -> 1840 ; vazio/inválido -> null */
-export function parseInteger(value: string): number | null {
-  const digits = value.replace(/[^\d-]/g, "");
-  if (!digits || digits === "-") return null;
-  const n = parseInt(digits, 10);
-  return Number.isFinite(n) ? n : null;
+/**
+ * Contagem digitada à mão (ex.: seguidores) -> número inteiro. Vazio ou inválido -> null.
+ * "1840" · "1.840" · "12,3 mil" -> 12300 · "12.3k" -> 12300 · "1,2 mi" -> 1200000
+ */
+export function parseCount(value: string): number | null {
+  const v = value.trim().toLowerCase().replace(/\s+/g, " ");
+  if (!v) return null;
+  const short = /^(\d+(?:[.,]\d+)?) ?(k|mil|m|mi|milhão|milhao|milhões|milhoes)$/.exec(v);
+  if (short) {
+    const factor = short[2] === "k" || short[2] === "mil" ? 1_000 : 1_000_000;
+    const n = Math.round(Number(short[1].replace(",", ".")) * factor);
+    return Number.isFinite(n) ? n : null;
+  }
+  if (/^\d+$/.test(v)) return Number(v);
+  if (/^\d{1,3}([., ]\d{3})+$/.test(v)) return Number(v.replace(/[., ]/g, ""));
+  return null;
 }
 
 /** Ordena textos que podem conter números ("Perfil 2" antes de "Perfil 10"). */

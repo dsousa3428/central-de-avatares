@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { AtSign, Pencil, Plus, UserRound } from "lucide-react";
 import { formatDate, formatDateTime, formatDuration, relativeDay } from "@/lib/dates";
-import { formatNumber, parseInteger } from "@/lib/format";
+import { formatNumber, parseCount } from "@/lib/format";
 import { generationLabel, lifetimeDays, nextGeneration, phoneLabel, profileLabel } from "@/lib/selectors";
 import { logActivity, updateRow, useStore } from "@/lib/store";
 import type { Account, AccountStatus, Avatar } from "@/lib/types";
@@ -27,51 +27,88 @@ interface AccountTabProps {
 }
 
 export function AccountTab({ avatar, account, accounts }: AccountTabProps) {
+  const [editing, setEditing] = useState<{ account: Account; status?: AccountStatus } | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [updatingFollowers, setUpdatingFollowers] = useState<Account | null>(null);
+
+  return (
+    <>
+      {account ? (
+        <CurrentAccount
+          avatar={avatar}
+          account={account}
+          onEdit={(status) => setEditing({ account, status })}
+          onUpdateFollowers={() => setUpdatingFollowers(account)}
+        />
+      ) : (
+        <NoAccount accounts={accounts} onCreate={() => setCreating(true)} />
+      )}
+
+      {/* Fora dos ramos acima: se a conta deixar de ser a "atual" durante o salvamento
+          (ex.: marcada como caída), o formulário continua aberto até terminar. */}
+      {editing ? (
+        <AccountForm
+          avatar={avatar}
+          account={editing.account}
+          initialStatus={editing.status}
+          onClose={() => setEditing(null)}
+        />
+      ) : null}
+      {creating ? <AccountForm avatar={avatar} onClose={() => setCreating(false)} /> : null}
+      {updatingFollowers ? (
+        <FollowersForm account={updatingFollowers} onClose={() => setUpdatingFollowers(null)} />
+      ) : null}
+    </>
+  );
+}
+
+function NoAccount({ accounts, onCreate }: { accounts: Account[]; onCreate: () => void }) {
+  const last = accounts[0];
+  return (
+    <Card>
+      <EmptyState
+        icon={<UserRound />}
+        title="Nenhuma conta ativa"
+        action={
+          <Button variant="primary" onClick={onCreate}>
+            <Plus className="size-4" /> Nova conta ({generationLabel(nextGeneration(accounts))})
+          </Button>
+        }
+      >
+        {last
+          ? `A última conta (@${last.handle}, ${generationLabel(last.generation)}) caiu${
+              last.fell_on ? ` em ${formatDate(last.fell_on)}` : ""
+            }. Suba uma nova geração para continuar.`
+          : "Este avatar ainda não tem nenhuma conta cadastrada."}
+      </EmptyState>
+    </Card>
+  );
+}
+
+interface CurrentAccountProps {
+  avatar: Avatar;
+  account: Account;
+  /** Abre o formulário de edição (opcionalmente já com um status escolhido). */
+  onEdit: (status?: AccountStatus) => void;
+  onUpdateFollowers: () => void;
+}
+
+function CurrentAccount({ avatar, account, onEdit, onUpdateFollowers }: CurrentAccountProps) {
   const db = useStore();
   const toast = useToast();
-  const [editing, setEditing] = useState<{ status?: AccountStatus } | null>(null);
-  const [creating, setCreating] = useState(false);
-  const [updatingFollowers, setUpdatingFollowers] = useState(false);
-
-  if (!account) {
-    const last = accounts[0];
-    return (
-      <>
-        <Card>
-          <EmptyState
-            icon={<UserRound />}
-            title="Nenhuma conta ativa"
-            action={
-              <Button variant="primary" onClick={() => setCreating(true)}>
-                <Plus className="size-4" /> Nova conta ({generationLabel(nextGeneration(accounts))})
-              </Button>
-            }
-          >
-            {last
-              ? `A última conta (@${last.handle}, ${generationLabel(last.generation)}) caiu${
-                  last.fell_on ? ` em ${formatDate(last.fell_on)}` : ""
-                }. Suba uma nova geração para continuar.`
-              : "Este avatar ainda não tem nenhuma conta cadastrada."}
-          </EmptyState>
-        </Card>
-        {creating ? <AccountForm avatar={avatar} onClose={() => setCreating(false)} /> : null}
-      </>
-    );
-  }
-
   const phone = db.phones.find((p) => p.id === account.phone_id);
   const profile = db.profiles.find((p) => p.id === account.profile_id);
   const life = lifetimeDays(account);
 
   async function changeStatus(next: AccountStatus) {
-    if (!account || next === account.status) return;
+    if (next === account.status) return;
     if (next === "caida") {
       // precisa de data e motivo: abre o formulário já marcado como caída
-      setEditing({ status: "caida" });
+      onEdit("caida");
       return;
     }
     try {
-      await updateRow("accounts", account.id, { status: next });
+      await updateRow("accounts", account.id, { status: next }, { optimistic: true });
       await logActivity({
         avatar_id: avatar.id,
         account_id: account.id,
@@ -99,7 +136,7 @@ export function AccountTab({ avatar, account, accounts }: AccountTabProps) {
         actions={
           <>
             <CopyButton text={`@${account.handle}`} message="@ copiado" />
-            <Button size="sm" onClick={() => setEditing({})}>
+            <Button size="sm" onClick={() => onEdit()}>
               <Pencil className="size-4" /> Editar
             </Button>
           </>
@@ -148,7 +185,7 @@ export function AccountTab({ avatar, account, accounts }: AccountTabProps) {
                   </span>
                 ) : null}
               </span>
-              <Button size="sm" variant="soft" onClick={() => setUpdatingFollowers(true)}>
+              <Button size="sm" variant="soft" onClick={onUpdateFollowers}>
                 Atualizar
               </Button>
             </span>
@@ -166,16 +203,6 @@ export function AccountTab({ avatar, account, accounts }: AccountTabProps) {
         Senhas e códigos de backup desta conta ficarão aqui a partir da etapa do cofre (criptografados com a sua
         senha-mestra).
       </p>
-
-      {editing ? (
-        <AccountForm
-          avatar={avatar}
-          account={account}
-          initialStatus={editing.status}
-          onClose={() => setEditing(null)}
-        />
-      ) : null}
-      {updatingFollowers ? <FollowersForm account={account} onClose={() => setUpdatingFollowers(false)} /> : null}
     </div>
   );
 }
@@ -186,8 +213,8 @@ function FollowersForm({ account, onClose }: { account: Account; onClose: () => 
   const [value, setValue] = useState(account.followers !== null ? String(account.followers) : "");
 
   async function submit() {
-    const followers = parseInteger(value);
-    if (followers === null || followers < 0) invalid("Digite o número de seguidores (só números).");
+    const followers = parseCount(value);
+    if (followers === null) invalid("Não entendi o número. Exemplos: 1840, 1.840 ou 12,3 mil.");
     await updateRow("accounts", account.id, { followers, followers_updated_at: new Date().toISOString() });
     toast.success("Seguidores atualizados");
   }

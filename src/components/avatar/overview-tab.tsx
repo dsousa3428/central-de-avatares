@@ -29,7 +29,7 @@ export function OverviewTab({ avatar, country, account, onEdit, onGoTo, onNewAcc
   async function toggleStatus() {
     const next = avatar.status === "ativo" ? "pausado" : "ativo";
     try {
-      await updateRow("avatars", avatar.id, { status: next });
+      await updateRow("avatars", avatar.id, { status: next }, { optimistic: true });
       toast.success(next === "ativo" ? "Avatar reativado" : "Avatar pausado");
     } catch (err) {
       toast.error(err);

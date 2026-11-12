@@ -17,6 +17,8 @@ interface ModalProps {
   size?: "sm" | "md" | "lg";
   /** Fechar ao tocar fora. Desligue em formulários para não perder o que foi digitado. */
   closeOnBackdrop?: boolean;
+  /** Falso enquanto algo está sendo salvo: Esc, "voltar" e o X não fecham a janela. */
+  canClose?: boolean;
 }
 
 const WIDTHS = { sm: "md:max-w-md", md: "md:max-w-lg", lg: "md:max-w-2xl" };
@@ -34,10 +36,15 @@ export function Modal({
   footer,
   size = "md",
   closeOnBackdrop = true,
+  canClose = true,
 }: ModalProps) {
   const ref = useRef<HTMLDialogElement>(null);
   const pressedBackdrop = useRef(false);
   const titleId = useId();
+
+  function requestClose() {
+    if (canClose) onClose();
+  }
 
   useLayoutEffect(() => {
     const dialog = ref.current;
@@ -60,11 +67,14 @@ export function Modal({
       aria-labelledby={titleId}
       onCancel={(event) => {
         event.preventDefault();
-        onClose();
+        requestClose();
       }}
       onClose={(event) => {
-        // fechado pelo navegador (ex.: Esc duas vezes): avisa quem abriu
-        if (open && !event.currentTarget.open) onClose();
+        // O navegador fechou por conta própria (ex.: Esc duas vezes seguidas).
+        const dialog = event.currentTarget;
+        if (!open || dialog.open) return;
+        if (canClose) onClose();
+        else dialog.showModal(); // ainda salvando: a janela volta, para o resultado não se perder
       }}
     >
       {open ? (
@@ -76,7 +86,7 @@ export function Modal({
           onClick={(event) => {
             const onBackdrop = event.target === event.currentTarget && pressedBackdrop.current;
             pressedBackdrop.current = false;
-            if (onBackdrop && closeOnBackdrop) onClose();
+            if (onBackdrop && closeOnBackdrop) requestClose();
           }}
         >
           <div
@@ -93,7 +103,15 @@ export function Modal({
                 </h2>
                 {description ? <p className="mt-1 text-sm leading-relaxed text-muted">{description}</p> : null}
               </div>
-              <Button variant="ghost" size="sm" iconOnly aria-label="Fechar" onClick={onClose} className="-mr-2 -mt-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                iconOnly
+                aria-label="Fechar"
+                onClick={requestClose}
+                disabled={!canClose}
+                className="-mr-2 -mt-1"
+              >
                 <X className="size-5" />
               </Button>
             </header>
@@ -158,7 +176,8 @@ export function FormModal({
   return (
     <Modal
       open
-      onClose={busy ? () => {} : onClose}
+      onClose={onClose}
+      canClose={!busy}
       title={title}
       description={description}
       size={size}
