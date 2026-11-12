@@ -27,21 +27,37 @@ async function write(text: string): Promise<boolean> {
   }
 }
 
-// A última coisa copiada pelo painel foi uma senha do cofre?
-let secretOnClipboard = false;
+// A última coisa copiada pelo painel foi uma senha do cofre? (guarda só a hora da cópia, nunca o texto)
+let secretCopiedAt: number | null = null;
 let clearTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** Por quanto tempo uma senha copiada fica na área de transferência antes de o painel tentar limpá-la. */
 export const SECRET_CLIPBOARD_SECONDS = 60;
+/**
+ * O navegador só deixa limpar com o painel aberto na frente. Se na hora ele estava em segundo
+ * plano, o painel tenta de novo ao voltar — mas só até este prazo depois da cópia: mais tarde
+ * que isso você provavelmente já copiou outra coisa, e não cabe ao painel apagá-la.
+ */
+const RETRY_UNTIL_SECONDS = 5 * 60;
+
+function stopWatching() {
+  if (clearTimer) clearTimeout(clearTimer);
+  clearTimer = null;
+  window.removeEventListener("focus", retryOnReturn);
+  document.removeEventListener("visibilitychange", retryOnReturn);
+}
+
+function retryOnReturn() {
+  if (document.visibilityState === "visible") forgetCopiedSecret();
+}
 
 /** Copia um texto. Devolve true se deu certo. */
 export async function copyText(text: string): Promise<boolean> {
   const ok = await write(text);
   if (ok) {
     // esta cópia substituiu o que havia: não há mais senha para limpar
-    secretOnClipboard = false;
-    if (clearTimer) clearTimeout(clearTimer);
-    clearTimer = null;
+    secretCopiedAt = null;
+    stopWatching();
   }
   return ok;
 }
@@ -54,8 +70,8 @@ export async function copyText(text: string): Promise<boolean> {
 export async function copySecret(text: string): Promise<boolean> {
   const ok = await write(text);
   if (ok) {
-    secretOnClipboard = true;
-    if (clearTimer) clearTimeout(clearTimer);
+    stopWatching();
+    secretCopiedAt = Date.now();
     clearTimer = setTimeout(forgetCopiedSecret, SECRET_CLIPBOARD_SECONDS * 1000);
   }
   return ok;
@@ -63,13 +79,27 @@ export async function copySecret(text: string): Promise<boolean> {
 
 /** Se a última coisa copiada pelo painel foi uma senha, tenta limpá-la da área de transferência. */
 export function forgetCopiedSecret(): void {
-  if (clearTimer) clearTimeout(clearTimer);
-  clearTimer = null;
-  if (!secretOnClipboard) return;
-  secretOnClipboard = false;
+  if (typeof window === "undefined") return;
+  stopWatching();
+  if (secretCopiedAt === null) return;
+  const age = Date.now() - secretCopiedAt;
+  if (age < 0 || age > RETRY_UNTIL_SECONDS * 1000) {
+    secretCopiedAt = null; // passou do prazo: não mexe mais na área de transferência
+    return;
+  }
+  const done = () => {
+    secretCopiedAt = null;
+  };
+  const later = () => {
+    // sem permissão agora (painel em segundo plano): tenta de novo quando ele voltar para a frente
+    if (secretCopiedAt === null) return;
+    window.addEventListener("focus", retryOnReturn);
+    document.addEventListener("visibilitychange", retryOnReturn);
+  };
   try {
-    void navigator.clipboard?.writeText("").catch(() => {});
+    if (!navigator.clipboard) return done();
+    navigator.clipboard.writeText("").then(done, later);
   } catch {
-    // sem permissão (painel em segundo plano): fica como está
+    later();
   }
 }

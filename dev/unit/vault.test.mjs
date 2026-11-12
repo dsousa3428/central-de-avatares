@@ -200,24 +200,48 @@ test("senha-mestra: tamanho mínimo e nada óbvio", () => {
     "onze letras": "curta",
     // do tamanho certo, mas previsíveis
     "123456789012": "fraca",
+    "847291650384": "fraca", // só números
     "aaaaaaaaaaaa": "fraca",
+    "aaaaaabbbbbb": "fraca",
     "senhasenhasenha": "fraca",
     "121212121212": "fraca",
     "password12345678": "fraca",
     "minhasenha123": "fraca",
+    "minha senha 9": "fraca",
     "qwertyuiop123": "fraca",
     "abcdefghijkl": "fraca",
     "Abc-123456xy": "fraca",
     "senha mestra cofre": "fraca",
     "zyxwvutsrqpo": "fraca",
+    "1q2w3e4r5t6y": "fraca", // sequências intercaladas
+    "a1b2c3d4e5f6": "fraca",
+    "brasil123456": "fraca",
+    "central de avatares": "fraca",
+    "instagram2026!": "fraca",
     // aceitas
     "Tr0ub4dor&3xyz": "boa",
+    "Xk9#2mP!4$7z": "boa", // aleatória, com poucas letras
+    "Fr@S4lv10#2026!": "boa",
     "minha casa azul": "boa",
+    "outra frase mestra 9876": "boa",
     "cavalo bateria grampo": "forte",
+    "dois gatos pretos": "forte",
     "quatro palavras soltas aqui": "forte",
     "frase mestra de teste 2026": "forte",
   };
   for (const [password, level] of Object.entries(expected)) {
     assert.equal(passwordStrength(password), level, `“${password}”`);
   }
+});
+
+test("senha-mestra: nomes do próprio painel não contam", () => {
+  const context = ["Fra' Salvio", "fra.salvio", "Itália", "dono@exemplo.com"];
+  assert.equal(passwordStrength("frasalvio2026"), "boa", "sem contexto, o painel não tem como saber");
+  assert.equal(passwordStrength("frasalvio2026", context), "fraca");
+  assert.equal(passwordStrength("Salvio.Italia.2026", context), "fraca");
+  assert.equal(passwordStrength("dono exemplo 123", context), "fraca");
+  // o contexto não atrapalha uma frase que não tem nada a ver com ele
+  assert.equal(passwordStrength("cavalo bateria grampo", context), "forte");
+  // palavras curtas do contexto (menos de 4 letras) são ignoradas
+  assert.equal(passwordStrength("fragata verde limao", ["Fra"]), "forte");
 });

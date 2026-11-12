@@ -350,11 +350,16 @@ begin
     raise exception 'cda_vault_secrets_changed' using errcode = 'P0001';
   end if;
 
-  -- 4) grava os blocos recifrados
+  -- 4) grava os blocos recifrados. Passa por TODAS as contas (as que não têm senhas
+  --    continuam sem): assim cada uma ganha um "updated_at" novo, e um aparelho que
+  --    ainda estivesse com a chave antiga não consegue gravar por cima depois da troca
+  --    (o painel só grava se a linha ainda estiver na versão que ele conhece).
   update public.accounts a
-     set secrets_enc = new_secrets -> a.id::text ->> 'new'
-   where a.user_id = (select auth.uid())
-     and a.secrets_enc is not null;
+     set secrets_enc = case
+           when a.secrets_enc is null then null
+           else new_secrets -> a.id::text ->> 'new'
+         end
+   where a.user_id = (select auth.uid());
 end
 $$;
 

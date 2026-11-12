@@ -267,7 +267,29 @@ export const MIN_MASTER_PASSWORD = 12;
 export type PasswordStrength = "curta" | "fraca" | "boa" | "forte";
 
 /** Palavras que todo ataque tenta primeiro: não contam para o tamanho. */
-const COMMON_WORDS = ["password", "senha", "mestra", "cofre", "instagram", "avatar", "admin", "login", "usuario"];
+const COMMON_WORDS = [
+  "password",
+  "senha",
+  "mestra",
+  "cofre",
+  "instagram",
+  "insta",
+  "avatares",
+  "avatar",
+  "central",
+  "painel",
+  "admin",
+  "login",
+  "usuario",
+  "brasil",
+  "iloveyou",
+  "welcome",
+  "letmein",
+  "futebol",
+  "flamengo",
+  "corinthians",
+  "palmeiras",
+];
 
 /** Fileiras do teclado, o alfabeto e os números: trechos em sequência (para frente ou para trás) não contam. */
 const SEQUENCES = ["qwertyuiop", "asdfghjkl", "zxcvbnm", "abcdefghijklmnopqrstuvwxyz", "01234567890"].flatMap((row) => [
@@ -302,22 +324,54 @@ function isRepetition(text: string): boolean {
   return false;
 }
 
+/** Minúsculas e sem acentos, para comparar ("Itália" = "italia"). */
+function fold(text: string): string {
+  return text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+}
+
+/**
+ * Palavras do próprio painel (nomes de avatares, @ das contas, e-mail de login…)
+ * viram trechos a desconsiderar: cada palavra de 4 letras ou mais e o nome
+ * inteiro sem espaços ("Fra' Salvio" → "salvio" e "frasalvio").
+ */
+function contextPieces(context: readonly string[]): string[] {
+  const pieces = new Set<string>();
+  for (const text of context) {
+    const words = fold(text).match(/[\p{L}\d]+/gu) ?? [];
+    for (const word of words) if (word.length >= 4) pieces.add(word);
+    const joined = words.join("");
+    if (joined.length >= 4) pieces.add(joined);
+  }
+  return [...pieces];
+}
+
 /**
  * Avaliação simples, só para barrar o óbvio e orientar. O que mais conta é o
- * tamanho; palavras muito comuns, sequências, números e repetições não contam.
+ * tamanho; palavras muito comuns, nomes do próprio painel (`context`),
+ * sequências e repetições não contam, e só números não bastam.
  * "curta" e "fraca" não são aceitas como senha-mestra.
  */
-export function passwordStrength(password: string): PasswordStrength {
+export function passwordStrength(password: string, context: readonly string[] = []): PasswordStrength {
   const chars = [...password];
   if (chars.length < MIN_MASTER_PASSWORD) return "curta";
-  const lower = password.toLowerCase();
+  const lower = fold(password);
   if (isRepetition(lower)) return "fraca";
-  // tira o que é previsível e vê quanto sobra de verdade (só as letras)
+
+  // tira o que é previsível (as palavras mais compridas primeiro) e vê quanto sobra de verdade
   let rest = lower;
-  for (const word of COMMON_WORDS) rest = rest.split(word).join("");
-  rest = stripSequences(rest).replace(/[^\p{L}]/gu, "");
-  const distinct = new Set(rest).size;
-  if (rest.length < 6 || distinct < 4) return "fraca";
-  if (chars.length >= 16 && rest.length >= 10 && distinct >= 6) return "forte";
+  const words = [...COMMON_WORDS, ...contextPieces(context)].sort((a, b) => b.length - a.length);
+  for (const word of words) rest = rest.split(word).join("");
+  const plain = stripSequences(rest).replace(/\s/g, "");
+  // sequências intercaladas ("1q2w3e4r", "a1b2c3d4"): olha as posições pares e as ímpares em separado
+  const letters = [...rest.replace(/\s/g, "")];
+  const even = letters.filter((_, index) => index % 2 === 0).join("");
+  const odd = letters.filter((_, index) => index % 2 === 1).join("");
+  const woven = stripSequences(even) + stripSequences(odd);
+  const effective = woven.length < plain.length ? woven : plain;
+
+  const distinct = new Set(effective).size;
+  const hasLetter = /\p{L}/u.test(effective);
+  if (effective.length < 10 || distinct < 5 || !hasLetter) return "fraca";
+  if (chars.length >= 16 && effective.length >= 12 && distinct >= 7) return "forte";
   return "boa";
 }

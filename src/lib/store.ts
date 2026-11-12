@@ -682,7 +682,12 @@ export function rekeyVault(
       }
       throw error;
     }
-    await reloadVaultData(userId);
+    // A troca já está gravada: se a leitura logo em seguida falhar, não é a troca que falhou.
+    try {
+      await reloadVaultData(userId);
+    } catch {
+      void refresh();
+    }
   });
 }
 
@@ -717,7 +722,11 @@ export function eraseVault(expectedSalt: string | null): Promise<void> {
     if (cleared.error) throw cleared.error;
     const { error } = await supabase.from("settings").update({ vault: null }).eq("user_id", userId);
     if (error) throw error;
-    await reloadVaultData(userId);
+    try {
+      await reloadVaultData(userId);
+    } catch {
+      void refresh();
+    }
   });
 }
 

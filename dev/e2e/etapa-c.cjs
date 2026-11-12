@@ -61,15 +61,16 @@ const secretsOf = (generation) => psql(`select coalesce(secrets_enc, '') from pu
   await save("Criar cofre");
   await formError("pelo menos 12 caracteres");
   ok("senha-mestra curta é recusada");
-  for (const weak of ["senhasenhasenha", "password12345678", "123456789012"]) {
+  for (const weak of ["senhasenhasenha", "password12345678", "123456789012", "1q2w3e4r5t6y", "FraSalvio@2026"]) {
     await field("Senha-mestra").fill(weak);
     await field("Repita a senha-mestra").fill(weak);
     await save("Criar cofre");
     await formError("fácil de adivinhar");
   }
-  ok("senhas-mestras óbvias (repetição, sequência, “password…”) são recusadas");
+  ok("senhas-mestras óbvias (repetição, sequência, “password…”, o nome do avatar) são recusadas");
   await field("Senha-mestra").fill(MASTER);
-  await dialog().getByText(/Força: forte/).waitFor();
+  // ("teste" está no e-mail de login, então não conta: a frase fica "boa", e não "forte")
+  await dialog().getByText(/Força: boa/).waitFor();
   await field("Repita a senha-mestra").fill(MASTER + "x");
   await save("Criar cofre");
   await formError("As duas senhas não são iguais");

@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { TriangleAlert } from "lucide-react";
+import { useAuth } from "@/lib/auth";
 import { AppError } from "@/lib/errors";
 import { cn, plural } from "@/lib/format";
-import { REKEY_UNAVAILABLE, schemaVersion } from "@/lib/store";
+import { REKEY_UNAVAILABLE, schemaVersion, useStore } from "@/lib/store";
 import { changeMasterPassword, createVaultWithPassword, unlockVault } from "@/lib/vault";
 import { MIN_MASTER_PASSWORD, passwordStrength, type PasswordStrength } from "@/lib/vault-crypto";
 import { CopySchemaButton } from "@/components/common/copy-schema-button";
@@ -32,13 +33,30 @@ const STRENGTH: Record<PasswordStrength, { label: string; tone: string; tip: str
   fraca: {
     label: "fácil de adivinhar",
     tone: "text-danger",
-    tip: "Evite repetições, sequências e palavras como “senha”. Junte 3 ou 4 palavras soltas.",
+    tip: "Evite repetições, sequências, só números, nomes dos seus avatares e palavras como “senha”. Junte 3 ou 4 palavras soltas.",
   },
   boa: { label: "boa", tone: "text-emerald-600 dark:text-emerald-400", tip: "Com 16 caracteres ou mais fica forte." },
   forte: { label: "forte", tone: "text-emerald-600 dark:text-emerald-400", tip: "Ótimo." },
 };
 
-function StrengthHint({ password }: { password: string }) {
+/** Nomes que não devem valer como senha-mestra: avatares, contas, países e os e-mails do painel. */
+function usePasswordContext(): string[] {
+  const db = useStore();
+  const auth = useAuth();
+  const loginEmail = auth.status === "signed_in" ? auth.email : null;
+  return useMemo(
+    () =>
+      [
+        ...db.avatars.map((avatar) => avatar.name),
+        ...db.accounts.flatMap((account) => [account.handle, account.email]),
+        ...db.countries.map((country) => country.name),
+        loginEmail,
+      ].filter((text): text is string => Boolean(text)),
+    [db.avatars, db.accounts, db.countries, loginEmail],
+  );
+}
+
+function StrengthHint({ password, context }: { password: string; context: string[] }) {
   if (!password) {
     return (
       <>
@@ -47,7 +65,7 @@ function StrengthHint({ password }: { password: string }) {
       </>
     );
   }
-  const level = STRENGTH[passwordStrength(password)];
+  const level = STRENGTH[passwordStrength(password, context)];
   return (
     <>
       Força: <strong className={cn("font-semibold", level.tone)}>{level.label}</strong>. {level.tip}
@@ -55,12 +73,14 @@ function StrengthHint({ password }: { password: string }) {
   );
 }
 
-function checkNewPassword(password: string, repeat: string) {
+function checkNewPassword(password: string, repeat: string, context: string[]) {
   if (password !== password.trim()) invalid("A senha-mestra não pode começar nem terminar com espaço.");
-  const strength = passwordStrength(password);
+  const strength = passwordStrength(password, context);
   if (strength === "curta") invalid(`A senha-mestra precisa ter pelo menos ${MIN_MASTER_PASSWORD} caracteres.`);
   if (strength === "fraca") {
-    invalid("Essa senha-mestra é fácil de adivinhar (repetição, sequência ou palavra muito comum). Junte 3 ou 4 palavras soltas.");
+    invalid(
+      "Essa senha-mestra é fácil de adivinhar (repetição, sequência, só números, nome de avatar ou palavra muito comum). Junte 3 ou 4 palavras soltas.",
+    );
   }
   if (password !== repeat) invalid("As duas senhas não são iguais. Digite de novo.");
 }
@@ -69,12 +89,13 @@ function checkNewPassword(password: string, repeat: string) {
 export function CreateVaultForm({ onClose }: { onClose: () => void }) {
   const toast = useToast();
   useCloseWhenIdle(onClose);
+  const context = usePasswordContext();
   const [password, setPassword] = useState("");
   const [repeat, setRepeat] = useState("");
   const [understood, setUnderstood] = useState(false);
 
   async function submit() {
-    checkNewPassword(password, repeat);
+    checkNewPassword(password, repeat, context);
     if (!understood) invalid("Marque a caixa confirmando que você entendeu o aviso sobre perder a senha-mestra.");
     await createVaultWithPassword(password);
     toast.success("Cofre criado e aberto");
@@ -89,7 +110,7 @@ export function CreateVaultForm({ onClose }: { onClose: () => void }) {
       submitLabel="Criar cofre"
     >
       <LostPasswordWarning />
-      <Field label="Senha-mestra" hint={<StrengthHint password={password} />}>
+      <Field label="Senha-mestra" hint={<StrengthHint password={password} context={context} />}>
         <MasterPasswordInput value={password} onChange={setPassword} autoFocus />
       </Field>
       <Field label="Repita a senha-mestra">
@@ -149,6 +170,7 @@ export function UnlockVaultForm({ onClose }: { onClose: () => void }) {
 export function ChangeMasterPasswordForm({ onClose }: { onClose: () => void }) {
   const toast = useToast();
   useCloseWhenIdle(onClose);
+  const context = usePasswordContext();
   const [current, setCurrent] = useState("");
   const [password, setPassword] = useState("");
   const [repeat, setRepeat] = useState("");
@@ -173,7 +195,7 @@ export function ChangeMasterPasswordForm({ onClose }: { onClose: () => void }) {
 
   async function submit() {
     if (!current) invalid("Digite a senha-mestra atual.");
-    checkNewPassword(password, repeat);
+    checkNewPassword(password, repeat, context);
     if (password === current.trim()) invalid("A senha nova é igual à atual.");
     let result;
     try {
@@ -244,7 +266,7 @@ export function ChangeMasterPasswordForm({ onClose }: { onClose: () => void }) {
       <Field label="Senha-mestra atual">
         <MasterPasswordInput value={current} onChange={setCurrent} autoFocus />
       </Field>
-      <Field label="Nova senha-mestra" hint={<StrengthHint password={password} />}>
+      <Field label="Nova senha-mestra" hint={<StrengthHint password={password} context={context} />}>
         <MasterPasswordInput value={password} onChange={setPassword} />
       </Field>
       <Field label="Repita a nova senha-mestra">

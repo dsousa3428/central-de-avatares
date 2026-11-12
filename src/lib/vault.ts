@@ -21,6 +21,7 @@ import {
 import type { Account, Settings } from "./types";
 import {
   createVault,
+  DecryptError,
   decryptSecrets,
   encryptSecrets,
   hasSecrets,
@@ -119,6 +120,8 @@ export function syncVaultWithSettings(settings: Pick<Settings, "vault"> | null |
   if (parseVaultConfig(settings.vault)?.salt === session.salt) return false;
   lockVault();
   changedElsewhere?.();
+  // as senhas das contas também foram regravadas lá: busca tudo de novo em segundo plano
+  void refresh();
   return true;
 }
 
@@ -239,8 +242,18 @@ function wrongPassword(err: unknown): never {
 }
 
 /**
- * Depois de uma falha de rede numa gravação do cofre: qual cofre ficou no banco?
- * (a resposta pode ter se perdido depois de a gravação ter dado certo)
+ * O banco recusou a gravação de propósito (o cofre mudou em outro aparelho, ou
+ * falta a função)? Nesses casos é certo que nada foi gravado. Em qualquer outra
+ * falha (queda de rede, erro do servidor) a gravação pode ter dado certo e só a
+ * resposta ter se perdido: é preciso conferir.
+ */
+function definitelyNotWritten(err: unknown): boolean {
+  const kind = toAppError(err).kind;
+  return kind === "conflict" || kind === "schema";
+}
+
+/**
+ * Depois de uma falha numa gravação do cofre: qual cofre ficou no banco?
  * Devolve o sal, null se não há cofre, ou undefined se não deu para conferir.
  */
 async function storedSalt(): Promise<string | null | undefined> {
@@ -268,12 +281,12 @@ export async function createVaultWithPassword(password: string): Promise<void> {
   try {
     await replaceVault(config as unknown as Record<string, unknown>, null);
   } catch (err) {
-    if (toAppError(err).kind !== "network") throw err;
+    if (definitelyNotWritten(err)) throw err;
     const stored = await storedSalt();
     if (stored === undefined) {
       throw new AppError(
         "network",
-        "Sem conexão: não consegui confirmar se o cofre foi criado. Quando a internet voltar, abra esta tela de novo — se aparecer “Destrancar”, use a senha-mestra que você acabou de digitar.",
+        "Não consegui confirmar se o cofre foi criado (falha de conexão). Quando a internet voltar, abra esta tela de novo — se aparecer “Destrancar”, use a senha-mestra que você acabou de digitar.",
       );
     }
     if (stored !== config.salt) throw err; // de fato não gravou
@@ -287,6 +300,7 @@ export async function unlockVault(password: string): Promise<void> {
   const userId = getStore().userId;
   if (!userId) throw new AppError("auth", "Sua sessão expirou. Entre novamente.");
   let settings = getStore().settings;
+  const known = parseVaultConfig(settings?.vault)?.salt;
   try {
     // a senha-mestra pode ter sido trocada em outro aparelho: usa a configuração mais recente
     settings = await reloadSettings();
@@ -295,6 +309,10 @@ export async function unlockVault(password: string): Promise<void> {
   }
   const config = parseVaultConfig(settings?.vault);
   if (!config) throw new AppError("invalid", "Não encontrei um cofre para abrir. Atualize a página e tente de novo.");
+  // O cofre é outro desde que esta tela carregou (senha trocada em outro aparelho): as senhas das
+  // contas também foram regravadas. Busca tudo antes de abrir, senão os blocos antigos da memória
+  // apareceriam como "não consegui abrir".
+  if (config.salt !== known) await refresh();
   let key: CryptoKey;
   try {
     // (a senha-mestra nunca começa nem termina com espaço: um espaço a mais no fim é erro de digitação)
@@ -331,9 +349,17 @@ export async function changeMasterPassword(currentPassword: string, newPassword:
   const blobs: Record<string, { old: string; new: string }> = {};
   let unreadable = 0;
   for (const row of await fetchSecretBlobs()) {
+    if (!isKnownPayload(row.secrets_enc)) {
+      // gravado por uma versão mais nova do painel: esta versão não sabe recifrar, então não troca nada
+      throw new AppError(
+        "invalid",
+        "Há senhas guardadas por uma versão mais nova do painel. Atualize a página (ou reabra o aplicativo) antes de trocar a senha-mestra.",
+      );
+    }
     try {
       blobs[row.id] = { old: row.secrets_enc, new: await reencryptSecrets(oldKey, next.key, row.id, row.secrets_enc) };
-    } catch {
+    } catch (err) {
+      if (!(err instanceof DecryptError)) throw toAppError(err);
       // este bloco já não abria com a senha atual: continua exatamente como estava
       blobs[row.id] = { old: row.secrets_enc, new: row.secrets_enc };
       unreadable += 1;
@@ -350,12 +376,12 @@ export async function changeMasterPassword(currentPassword: string, newPassword:
   try {
     await rekeyVault(config.salt, next.config as unknown as Record<string, unknown>, blobs);
   } catch (err) {
-    const stored = toAppError(err).kind === "network" ? await storedSalt() : config.salt;
+    const stored = definitelyNotWritten(err) ? config.salt : await storedSalt();
     if (stored === undefined) {
       // não dá para saber qual das duas senhas está valendo: fica trancado, com a explicação
       throw new AppError(
         "network",
-        "Sem conexão: não consegui confirmar se a troca foi gravada. Quando a internet voltar, tente destrancar — se a senha antiga não abrir, a nova já está valendo.",
+        "Não consegui confirmar se a troca foi gravada (falha de conexão). Quando a internet voltar, tente destrancar — se a senha antiga não abrir, a nova já está valendo.",
       );
     }
     if (stored !== next.config.salt) {
