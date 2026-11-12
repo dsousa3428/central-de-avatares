@@ -31,7 +31,7 @@ function KitText({ label, text, copyMessage }: { label: string; text: string | u
       <div className="min-w-0 flex-1">
         <p className="text-sm text-muted">{label}</p>
         {text ? (
-          <p className="mt-0.5 whitespace-pre-wrap break-words text-[15px] leading-relaxed">{text}</p>
+          <p className="mt-0.5 whitespace-pre-wrap text-[15px] leading-relaxed">{text}</p>
         ) : (
           <p className="mt-0.5 text-[15px] text-muted">—</p>
         )}
@@ -105,7 +105,7 @@ export function KitTab({ avatar }: { avatar: Avatar }) {
                 <div className="min-w-0 flex-1">
                   <p className="text-[15px] font-medium">{item.title}</p>
                   {item.text ? (
-                    <p className="mt-0.5 whitespace-pre-wrap break-words text-sm leading-relaxed text-muted">{item.text}</p>
+                    <p className="mt-0.5 whitespace-pre-wrap text-sm leading-relaxed text-muted">{item.text}</p>
                   ) : null}
                 </div>
                 <CopyButton text={item.text || item.title} message="Texto copiado" />

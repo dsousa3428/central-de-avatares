@@ -24,7 +24,7 @@ export function DetailRow({ label, value, children, copy, copyMessage, mono }: D
     <div className="flex min-h-12 items-center gap-3 py-2">
       <div className="min-w-0 flex-1 md:flex md:items-center md:gap-3">
         <dt className="text-sm text-muted md:w-36 md:shrink-0">{label}</dt>
-        <dd className={cn("mt-0.5 min-w-0 break-words text-[15px] md:mt-0 md:flex-1", mono && "font-mono text-sm")}>
+        <dd className={cn("mt-0.5 min-w-0 text-[15px] md:mt-0 md:flex-1", mono && "font-mono text-sm")}>
           {empty ? <span className="text-muted">—</span> : (children ?? value)}
         </dd>
       </div>

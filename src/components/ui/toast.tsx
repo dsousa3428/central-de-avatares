@@ -79,7 +79,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 className="cda-toast pointer-events-auto flex w-fit max-w-full items-start gap-2.5 rounded-2xl bg-neutral-900 px-4 py-3 text-sm font-medium text-white shadow-pop ring-1 ring-white/10"
               >
                 <Icon className={cn("mt-0.5 size-4 shrink-0", TONES[toast.kind])} aria-hidden />
-                <span className="min-w-0 break-words">{toast.message}</span>
+                <span className="min-w-0">{toast.message}</span>
               </div>
             );
           })}

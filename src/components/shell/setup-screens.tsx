@@ -137,7 +137,7 @@ export function SchemaMissingScreen({ error, onRetry }: { error: AppError; onRet
           <RefreshCw className="size-4" /> Já rodei
         </Button>
       </div>
-      {error.detail ? <p className="break-words font-mono text-xs opacity-70">Detalhe técnico: {error.detail}</p> : null}
+      {error.detail ? <p className="font-mono text-xs opacity-70">Detalhe técnico: {error.detail}</p> : null}
     </SetupLayout>
   );
 }
@@ -156,7 +156,7 @@ export function LoadErrorScreen({ error, onRetry }: { error: AppError; onRetry: 
         </Button>
       </div>
       {error.detail && error.detail !== error.message ? (
-        <p className="break-words font-mono text-xs opacity-70">Detalhe técnico: {error.detail}</p>
+        <p className="font-mono text-xs opacity-70">Detalhe técnico: {error.detail}</p>
       ) : null}
     </SetupLayout>
   );

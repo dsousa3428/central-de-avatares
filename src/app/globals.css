@@ -75,6 +75,8 @@ html {
 body {
   background: var(--bg);
   color: var(--fg);
+  /* links, e-mails e proxies longos quebram de linha em vez de estourar a tela */
+  overflow-wrap: anywhere;
 }
 
 /* Trava a rolagem do fundo enquanto uma janela está aberta */
