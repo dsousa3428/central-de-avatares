@@ -17,6 +17,7 @@ import type {
   Phone,
   ReferenceProfile,
 } from "./types";
+import { accountForWeek, addWeeks, weekStart } from "./sales";
 import type { Db } from "./store";
 import { buildDays, DEFAULT_WARMUP_PLAN } from "./warmup";
 
@@ -24,8 +25,9 @@ import { buildDays, DEFAULT_WARMUP_PLAN } from "./warmup";
  * Aumente quando os exemplos ganharem dados novos.
  *  1 = país, avatar, contas, celulares e perfis
  *  2 = + calendário de aquecimento da conta de exemplo que está aquecendo
+ *  3 = + vendas semanais do avatar de exemplo
  */
-export const EXAMPLES_VERSION = 2;
+export const EXAMPLES_VERSION = 3;
 
 async function insertOne<T>(table: string, values: Record<string, unknown>): Promise<T> {
   const { data, error } = await getSupabase().from(table).insert(values).select().single();
@@ -202,6 +204,7 @@ export async function seedExamples(): Promise<void> {
   const at = (isoDate: string, hour: number) => new Date(`${isoDate}T${String(hour).padStart(2, "0")}:00:00`).toISOString();
 
   await insertOne("warmups", exampleWarmup(gen2.id, gen2Created, today));
+  await insertExampleSales(avatar.id, [gen1, gen2], today);
 
   const { error } = await getSupabase()
     .from("activity_log")
@@ -266,6 +269,37 @@ function exampleWarmup(accountId: string, startDate: string, today: string): Rec
   };
 }
 
+/** Quantas unidades do produto de exemplo (€ 27) foram vendidas em cada semana, da mais antiga para a mais recente. */
+const EXAMPLE_WEEKLY_UNITS = [4, 6, 5, 9, 7, 11, 3, 8];
+const EXAMPLE_PRICE = 27;
+
+/**
+ * Vendas de exemplo: oito semanas já fechadas, em euros, cada uma ligada à
+ * conta que estava no ar. A semana atual fica livre para o primeiro lançamento
+ * de verdade.
+ */
+async function insertExampleSales(
+  avatarId: string,
+  accounts: Array<Pick<Account, "id" | "generation" | "created_on" | "fell_on">>,
+  today: string,
+): Promise<void> {
+  const thisWeek = weekStart(today);
+  const rows = EXAMPLE_WEEKLY_UNITS.map((units, index) => {
+    const week = addWeeks(thisWeek, index - EXAMPLE_WEEKLY_UNITS.length);
+    return {
+      is_example: true,
+      avatar_id: avatarId,
+      account_id: accountForWeek(accounts as Account[], week)?.id ?? null,
+      week_start: week,
+      amount: units * EXAMPLE_PRICE,
+      currency: "EUR",
+      sales_count: units,
+    };
+  });
+  const { error } = await getSupabase().from("weekly_sales").insert(rows);
+  if (error) throw toAppError(error);
+}
+
 /**
  * Completa exemplos criados por uma versão anterior do painel (só mexe em
  * linhas marcadas como exemplo). Devolve true se criou alguma coisa.
@@ -285,6 +319,19 @@ export async function upgradeExamples(db: Db, fromVersion: number): Promise<bool
       changed = true;
     }
   }
+  if (fromVersion < 3) {
+    // vendas de exemplo para os avatares de exemplo que ainda não têm nenhuma venda lançada
+    const today = todayISO();
+    for (const avatar of db.avatars) {
+      if (!avatar.is_example || db.sales.some((sale) => sale.avatar_id === avatar.id)) continue;
+      await insertExampleSales(
+        avatar.id,
+        db.accounts.filter((account) => account.avatar_id === avatar.id),
+        today,
+      );
+      changed = true;
+    }
+  }
   return changed;
 }
 
@@ -294,6 +341,8 @@ export interface ExampleCounts {
   accounts: number;
   phones: number;
   profiles: number;
+  /** Lançamentos de vendas de exemplo. */
+  sales: number;
   total: number;
 }
 
@@ -303,13 +352,15 @@ export function countExamples(db: Db): ExampleCounts {
   const accounts = db.accounts.filter((r) => r.is_example).length;
   const phones = db.phones.filter((r) => r.is_example).length;
   const profiles = db.profiles.filter((r) => r.is_example).length;
+  const sales = db.sales.filter((r) => r.is_example).length;
   return {
     countries,
     avatars,
     accounts,
     phones,
     profiles,
-    total: countries + avatars + accounts + phones + profiles,
+    sales,
+    total: countries + avatars + accounts + phones + profiles + sales,
   };
 }
 

@@ -18,6 +18,7 @@ import { LinksTab } from "@/components/avatar/links-tab";
 import { NotesTab } from "@/components/avatar/notes-tab";
 import { OverviewTab } from "@/components/avatar/overview-tab";
 import { ReferencesTab } from "@/components/avatar/references-tab";
+import { SalesTab } from "@/components/avatar/sales-tab";
 import { VideosTab } from "@/components/avatar/videos-tab";
 import { WarmupTab } from "@/components/avatar/warmup-tab";
 import { AvatarPhoto } from "@/components/ui/avatar-photo";
@@ -28,7 +29,7 @@ import { useConfirm } from "@/components/ui/confirm";
 import { Tabs, type TabItem } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/toast";
 
-const TAB_VALUES = ["geral", "conta", "aquecimento", "links", "videos", "perfis", "kit", "historico", "notas"] as const;
+const TAB_VALUES = ["geral", "conta", "aquecimento", "links", "videos", "perfis", "kit", "vendas", "historico", "notas"] as const;
 type TabValue = (typeof TAB_VALUES)[number];
 
 function isTab(value: string | null): value is TabValue {
@@ -116,6 +117,7 @@ function AvatarContent({ avatar, tab }: { avatar: Avatar; tab: TabValue }) {
     { value: "videos", label: "Vídeos", count: pendingVideos > 0 ? pendingVideos : undefined },
     { value: "perfis", label: "Perfis de exemplo" },
     { value: "kit", label: "Kit de reposição" },
+    { value: "vendas", label: "Vendas" },
     { value: "historico", label: "Histórico", count: accounts.length > 0 ? accounts.length : undefined },
     { value: "notas", label: "Anotações" },
   ];
@@ -171,6 +173,7 @@ function AvatarContent({ avatar, tab }: { avatar: Avatar; tab: TabValue }) {
       {tab === "videos" ? <VideosTab avatar={avatar} /> : null}
       {tab === "perfis" ? <ReferencesTab avatar={avatar} /> : null}
       {tab === "kit" ? <KitTab avatar={avatar} /> : null}
+      {tab === "vendas" ? <SalesTab avatar={avatar} accounts={accounts} /> : null}
       {tab === "historico" ? <HistoryTab avatar={avatar} accounts={accounts} /> : null}
       {/* fica sempre montada (só escondida) para não perder um texto ainda não salvo ao trocar de aba */}
       <div hidden={tab !== "notas"}>

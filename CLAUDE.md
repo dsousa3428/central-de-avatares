@@ -7,7 +7,7 @@ Painel privado, de um único usuário, para organizar contas de Instagram de ava
 ## Como trabalhar com o dono do projeto
 
 - Ele **não é programador**: explique em português simples, peça só o indispensável (chaves e logins) e guie com cliques.
-- Entrega **em etapas**, nesta ordem: (a) base + login + países/avatares/contas ✅ · (b) aquecimento + tela Hoje ✅ · (c) cofre de senhas ✅ · (d) vendas · (e) "Conta caiu" + avisos · (f) PWA + backup. Fora da ordem, a pedido dele: **Planilha** ✅ (visão em tabela de tudo).
+- Entrega **em etapas**, nesta ordem: (a) base + login + países/avatares/contas ✅ · (b) aquecimento + tela Hoje ✅ · (c) cofre de senhas ✅ · (d) vendas ✅ · (e) "Conta caiu" + avisos · (f) PWA + backup. Fora da ordem, a pedido dele: **Planilha** ✅ (visão em tabela de tudo).
 - Ele quer o painel "o mais completo possível": ao terminar uma etapa, deixe claro o que já existe e o que falta.
 - Ao fim de cada etapa: publicar e dizer exatamente o que testar no celular.
 - O painel **não acessa o Instagram**, não automatiza nada. Por decisão de segurança operacional, não criamos links para `instagram.com` (só copiar o @).
@@ -41,6 +41,13 @@ Painel privado, de um único usuário, para organizar contas de Instagram de ava
   - Copiar uma senha usa `copySecret()`: o painel tenta limpar a área de transferência depois de 1 minuto e ao trancar. A Planilha e as exportações só dizem "No cofre": nunca inclua `secrets_enc` nem texto decifrado em colunas, busca ou arquivos. "Apagar exemplos" não apaga conta com `secrets_enc` (ela deixa de ser exemplo).
   - Senha-mestra: mínimo de 12 caracteres e `passwordStrength(senha, contexto)` barra o óbvio (repetição, sequência — inclusive intercalada —, só números, "senha…", e os nomes do próprio painel: avatares, @, países, e-mails). Quem tiver uma cópia do banco pode tentar adivinhar sem limite: o tamanho é a proteção.
   - Falha ao gravar o cofre (criar/trocar a senha): só "conflito" e "falta a função" significam que nada foi gravado. Em qualquer outro erro a gravação pode ter dado certo e a resposta ter se perdido — o código confere o sal que ficou no banco antes de dizer que falhou (`definitelyNotWritten` / `storedSalt`).
+- **Vendas**: regras puras em `src/lib/sales.ts` (testadas em `dev/unit/sales.test.mjs`), gravações em `src/lib/sales-actions.ts`, telas em `src/components/sales/*`, `screens/sales-screen.tsx` e `avatar/sales-tab.tsx`.
+  - A semana vai de **segunda a domingo**; `weekly_sales.week_start` é a segunda-feira. Um lançamento por avatar por semana (restrição única no banco): `saveSale()` atualiza o que existe ou insere; se outro aparelho inseriu antes (erro 23505), avisa e recarrega. O mês de uma semana é o mês da segunda-feira.
+  - Moedas: cada lançamento tem a sua. `settings.brl_rates` = quantos reais vale 1 unidade (digitado à mão em Vendas → Cotações). Um lançamento novo guarda a cotação do dia em `brl_rate`; lançamento sem cotação guardada usa a atual (`rateOf`). `sumSales()` devolve as somas por moeda, o total em reais do que tem cotação e as moedas que ficaram sem (`missing`).
+  - Para comparar (gráfico, ranking) existe a "moeda de comparação" (`unitFor`): a própria moeda quando só há uma; reais quando há várias (`partial` quando falta cotação de alguma — a tela avisa que essas vendas ficam de fora). Para escrever um total, use `describeTotals()`.
+  - `accountForWeek()` escolhe a conta que estava no ar na semana (a geração mais nova que já existia e ainda não tinha caído); o formulário de detalhes deixa trocar.
+  - Lançamento de exemplo corrigido pelo usuário perde a marca de exemplo (`saveSale`), para "Apagar exemplos" não levar um dado real.
+  - Gráfico (`sales/week-chart.tsx`): feito com as regras da skill `dataviz` — uma série, uma cor (`bg-primary`, validada nos dois temas), colunas de no máximo 24px com 2px de respiro, linha de base no zero, marcas "redondas" (`niceScale`), um estilo de número por eixo, leitura por toque/mouse/teclado e "Ver tabela" com os mesmos números. O ranking usa barras horizontais de uma cor só (`sales/ranked-list.tsx`). Texto nunca usa a cor da série.
 - **Content-Security-Policy** em `next.config.ts` (páginas estáticas → sem nonce, por isso `'unsafe-inline'`). `connect-src` libera só o próprio painel e a origem de `NEXT_PUBLIC_SUPABASE_URL`. Ao usar um serviço externo novo (ex.: cotação de moedas), é preciso liberá-lo ali — e pensar duas vezes: hoje nada sai do aparelho além do Supabase.
 - `cn()` usa `tailwind-merge`: quando duas classes disputam o mesmo estilo, vale a última (por isso `className="h-10"` em um `<Input>` funciona).
 - Botões (`Button`, `Segmented`) **não quebram o texto** em duas linhas. No rodapé das janelas cabem, no celular, Cancelar + Salvar + no máximo um botão curto (ex.: "Apagar"); ação com texto maior vai no corpo da janela (ver "Voltar ao padrão original" em `default-plan-form.tsx`).
@@ -69,7 +76,7 @@ Painel privado, de um único usuário, para organizar contas de Instagram de ava
 
 ## Testes
 
-Veja `dev/README.md`. Resumo: `node dev/local.mjs up` → `npm run build && npm start` → `node dev/e2e/etapa-a.cjs`, `etapa-b.cjs`, `etapa-c.cjs`, `planilha.cjs`, `extras.cjs` e `robustez.cjs`, as duas conferências de layout (`textos-longos.cjs` e `botoes.cjs`), mais `npm run test:unit`. Nos testes que dependem de "hoje", abra o navegador com `timezoneId: "UTC"` (o banco local está em UTC). Antes de entregar uma etapa: `npm run typecheck`, `npm run lint`, build e os testes (em produção **e** com `npm run dev`, que é mais rigoroso), mais uma conferida visual (celular 360–390px e computador, claro e escuro, e com textos bem longos).
+Veja `dev/README.md`. Resumo: `node dev/local.mjs up` → `npm run build && npm start` → `node dev/e2e/etapa-a.cjs`, `etapa-b.cjs`, `etapa-c.cjs`, `etapa-d.cjs`, `planilha.cjs`, `extras.cjs` e `robustez.cjs`, as duas conferências de layout (`textos-longos.cjs` e `botoes.cjs`), mais `npm run test:unit`. Nos testes que dependem de "hoje", abra o navegador com `timezoneId: "UTC"` (o banco local está em UTC). Antes de entregar uma etapa: `npm run typecheck`, `npm run lint`, build e os testes (em produção **e** com `npm run dev`, que é mais rigoroso), mais uma conferida visual (celular 360–390px e computador, claro e escuro, e com textos bem longos).
 
 ## Publicação
 
@@ -78,6 +85,5 @@ Veja `dev/README.md`. Resumo: `node dev/local.mjs up` → `npm run build && npm 
 
 ## Ideias anotadas para as próximas etapas
 
-- (d) Vendas: semana começa na segunda; cotação manual por moeda em `settings.brl_rates`. Acrescentar a aba "Vendas" na Planilha e as vendas do mês nos cartões de Países.
-- (e) "Conta caiu": assistente que cria a nova geração puxando o kit e exige confirmação para reutilizar celular/perfil/proxy da conta caída; lista central de avisos na tela Hoje. Os avisos de reuso dentro do formulário de conta já existem.
+- (e) "Conta caiu": assistente que cria a nova geração puxando o kit e exige confirmação para reutilizar celular/perfil/proxy da conta caída; lista central de avisos na tela Hoje (inclusive "semana sem lançamento de vendas": avatar ativo sem `weekly_sales` na semana passada). Os avisos de reuso dentro do formulário de conta já existem.
 - (f) PWA (manifest + service worker + ícones), exportar/importar JSON e CSV, busca global, trocar senha de login dentro do painel. Na importação, **preserve os ids das contas** (o bloco cifrado de cada conta só abre com o mesmo id) e leve junto `settings.vault`; o service worker precisa caber no CSP (`worker-src 'self'` já está liberado) e não pode guardar em cache respostas do Supabase.

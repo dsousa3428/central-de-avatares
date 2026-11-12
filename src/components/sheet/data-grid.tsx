@@ -22,7 +22,7 @@ export type GridEdit<R> =
       value: (row: R) => string;
       /** Grava o valor novo. Se lançar erro, a célula volta ao valor antigo e o erro aparece. */
       save: (row: R, value: string) => Promise<void>;
-      inputMode?: "text" | "numeric" | "email" | "url";
+      inputMode?: "text" | "numeric" | "decimal" | "email" | "url";
     }
   | {
       type: "select";

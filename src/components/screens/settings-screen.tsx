@@ -18,7 +18,6 @@ import { Segmented } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/toast";
 
 const UPCOMING: Array<{ step: string; title: string; text: string }> = [
-  { step: "d", title: "Vendas", text: "Lançamento semanal, totais, gráfico, ranking e conversão para reais." },
   { step: "e", title: "“Conta caiu” + avisos", text: "Assistente de reposição com checklist e avisos automáticos de risco." },
   { step: "f", title: "App instalável + backup", text: "Instalar no celular, exportar/importar tudo, busca global." },
 ];
@@ -40,6 +39,7 @@ export function SettingsScreen() {
     examples.accounts ? plural(examples.accounts, "conta", "contas") : null,
     examples.phones ? plural(examples.phones, "celular", "celulares") : null,
     examples.profiles ? plural(examples.profiles, "perfil anti-detect", "perfis anti-detect") : null,
+    examples.sales ? plural(examples.sales, "lançamento de vendas", "lançamentos de vendas") : null,
   ].filter(Boolean);
 
   const exampleNames = [

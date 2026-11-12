@@ -2,14 +2,17 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Fingerprint, Smartphone, Table2, UserRound } from "lucide-react";
+import { Fingerprint, Smartphone, Table2, TrendingUp, UserRound } from "lucide-react";
 import { changeAccountStatus } from "@/lib/account-actions";
 import { formatDate, isValidISODate, todayISO } from "@/lib/dates";
-import { clean, formatMoney, formatNumber, normalizeHandle, parseCount, prettyUrl } from "@/lib/format";
+import { clean, formatMoney, formatNumber, normalizeHandle, parseCount, parseDecimal, prettyUrl } from "@/lib/format";
+import { cleanRates, inBRL, weekLabel } from "@/lib/sales";
+import { saveSale } from "@/lib/sales-actions";
 import {
   accountsOf,
   currentAccount,
   describeAccount,
+  generationLabel,
   isWarmupRunning,
   lifetimeDays,
   usageByPhone,
@@ -18,7 +21,16 @@ import {
   type Usage,
 } from "@/lib/selectors";
 import { updateRow, useStore, type Db } from "@/lib/store";
-import type { Account, AccountStatus, AntidetectProfile, Avatar, AvatarStatus, Country, Phone } from "@/lib/types";
+import type {
+  Account,
+  AccountStatus,
+  AntidetectProfile,
+  Avatar,
+  AvatarStatus,
+  Country,
+  Phone,
+  WeeklySale,
+} from "@/lib/types";
 import { warmupInfo, warmupShortLabel } from "@/lib/warmup";
 import { AccountForm } from "@/components/avatar/account-form";
 import { ExternalLinkText } from "@/components/common/detail-row";
@@ -30,7 +42,7 @@ import { EmptyState } from "@/components/ui/card";
 import { Select } from "@/components/ui/field";
 import { Tabs } from "@/components/ui/tabs";
 
-type SheetName = "contas" | "avatares" | "celulares" | "perfis";
+type SheetName = "contas" | "avatares" | "vendas" | "celulares" | "perfis";
 
 const STATUS_ORDER: AccountStatus[] = ["aquecendo", "ativa", "restrita", "caida"];
 const STATUS_DOT: Record<AccountStatus, string> = {
@@ -58,12 +70,14 @@ export function SheetScreen() {
         items={[
           { value: "contas", label: "Contas", count: db.accounts.length },
           { value: "avatares", label: "Avatares", count: db.avatars.length },
+          { value: "vendas", label: "Vendas", count: db.sales.length },
           { value: "celulares", label: "Celulares", count: db.phones.length },
           { value: "perfis", label: "Perfis anti-detect", count: db.profiles.length },
         ]}
       />
       {sheet === "contas" ? <AccountsSheet db={db} /> : null}
       {sheet === "avatares" ? <AvatarsSheet db={db} /> : null}
+      {sheet === "vendas" ? <SalesSheet db={db} /> : null}
       {sheet === "celulares" ? <PhonesSheet db={db} /> : null}
       {sheet === "perfis" ? <ProfilesSheet db={db} /> : null}
     </>
@@ -408,6 +422,158 @@ function AccountsSheet({ db }: { db: Db }) {
         />
       ) : null}
     </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Vendas
+// ---------------------------------------------------------------------------
+
+interface SaleRow {
+  sale: WeeklySale;
+  avatar: Avatar | undefined;
+  country: Country | undefined;
+  account: Account | undefined;
+  /** O valor em reais, ou null se a moeda não tem cotação. */
+  brl: number | null;
+}
+
+/** Um valor em dinheiro como as planilhas em português esperam: "1234,50". */
+function plainAmount(value: number): string {
+  return value.toFixed(2).replace(".", ",");
+}
+
+function SalesSheet({ db }: { db: Db }) {
+  const [country, setCountry] = useState("");
+  const today = todayISO();
+
+  const rows = useMemo<SaleRow[]>(() => {
+    const rates = cleanRates(db.settings?.brl_rates);
+    return db.sales
+      .map((sale) => {
+        const avatar = db.avatars.find((a) => a.id === sale.avatar_id);
+        return {
+          sale,
+          avatar,
+          country: avatar ? db.countries.find((c) => c.id === avatar.country_id) : undefined,
+          account: db.accounts.find((a) => a.id === sale.account_id),
+          brl: inBRL(sale, rates),
+        };
+      })
+      .filter((row) => !country || row.country?.id === country)
+      .sort(
+        (a, b) =>
+          b.sale.week_start.localeCompare(a.sale.week_start) ||
+          (a.avatar?.name ?? "").localeCompare(b.avatar?.name ?? "", "pt-BR"),
+      );
+  }, [db.sales, db.avatars, db.countries, db.accounts, db.settings?.brl_rates, country]);
+
+  const columns = useMemo<GridColumn<SaleRow>[]>(
+    () => [
+      {
+        key: "avatar",
+        header: "Avatar",
+        width: "min-w-36",
+        text: (r) => r.avatar?.name ?? "",
+        render: (r) => (r.avatar ? <AvatarLink avatar={r.avatar} country={r.country} tab="vendas" /> : "—"),
+      },
+      { key: "pais", header: "País", text: (r) => r.country?.name ?? "" },
+      {
+        key: "semana",
+        header: "Semana",
+        width: "min-w-32",
+        // na exportação vai a data da segunda-feira; na tela, o intervalo da semana
+        text: (r) => formatDate(r.sale.week_start),
+        sort: (r) => r.sale.week_start,
+        render: (r) => weekLabel(r.sale.week_start, today),
+      },
+      {
+        key: "valor",
+        header: "Valor",
+        align: "right",
+        text: (r) => plainAmount(Number(r.sale.amount)),
+        sort: (r) => Number(r.sale.amount),
+        render: (r) => formatMoney(Number(r.sale.amount), r.sale.currency),
+        edit: {
+          type: "text",
+          inputMode: "decimal",
+          value: (r) => plainAmount(Number(r.sale.amount)),
+          save: async (r, value) => {
+            const amount = parseDecimal(value);
+            if (amount === null || amount < 0) invalid("Não entendi o valor. Exemplos: 150 ou 1.234,50.");
+            if (!r.avatar) invalid("Este lançamento está sem avatar.");
+            await saveSale(r.avatar, r.sale.week_start, { amount, currency: r.sale.currency });
+          },
+        },
+      },
+      { key: "moeda", header: "Moeda", text: (r) => r.sale.currency },
+      {
+        key: "quantidade",
+        header: "Qtd. de vendas",
+        align: "right",
+        text: (r) => (r.sale.sales_count === null ? "" : String(r.sale.sales_count)),
+        sort: (r) => r.sale.sales_count,
+        edit: {
+          type: "text",
+          inputMode: "numeric",
+          value: (r) => (r.sale.sales_count === null ? "" : String(r.sale.sales_count)),
+          save: async (r, value) => {
+            const count = value.trim() ? parseCount(value) : null;
+            if (value.trim() && count === null) invalid("Não entendi a quantidade. Exemplo: 12.");
+            await updateRow("weekly_sales", r.sale.id, { sales_count: count }, quick);
+          },
+        },
+      },
+      {
+        key: "reais",
+        header: "Em reais",
+        align: "right",
+        text: (r) => (r.brl === null ? "" : plainAmount(r.brl)),
+        sort: (r) => r.brl,
+        render: (r) => (r.brl === null ? "sem cotação" : formatMoney(r.brl, "BRL")),
+      },
+      {
+        key: "conta",
+        header: "Conta na semana",
+        text: (r) => (r.account ? `${r.account.handle} (${generationLabel(r.account.generation)})` : ""),
+        render: (r) => (r.account ? `@${r.account.handle} · ${generationLabel(r.account.generation)}` : "—"),
+      },
+      {
+        key: "observacao",
+        header: "Observação",
+        text: (r) => r.sale.notes ?? "",
+        edit: {
+          type: "text",
+          value: (r) => r.sale.notes ?? "",
+          save: (r, value) => updateRow("weekly_sales", r.sale.id, { notes: clean(value) }, quick),
+        },
+      },
+    ],
+    [today],
+  );
+
+  return (
+    <DataGrid
+      columns={columns}
+      rows={rows}
+      rowKey={(row) => row.sale.id}
+      exportName="vendas"
+      filters={
+        <FilterSelect
+          label="Filtrar por país"
+          value={country}
+          onChange={setCountry}
+          options={[{ value: "", label: "País: todos" }, ...db.countries.map((c) => ({ value: c.id, label: c.name }))]}
+        />
+      }
+      empty={
+        <EmptyState icon={<TrendingUp />} title="Nenhuma venda para mostrar">
+          {db.sales.length === 0
+            ? "As vendas lançadas na tela Vendas aparecem aqui, uma semana de um avatar por linha."
+            : "Nenhuma venda combina com o filtro escolhido."}
+        </EmptyState>
+      }
+    />
   );
 }
 

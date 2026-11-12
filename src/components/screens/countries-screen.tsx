@@ -3,9 +3,10 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ChevronRight, Clock, Coins, Globe, Languages, Pencil, Plus, Tags, UserRound } from "lucide-react";
-import { formatDayMonth, timeInZone } from "@/lib/dates";
+import { formatDayMonth, timeInZone, todayISO } from "@/lib/dates";
 import { copyText } from "@/lib/clipboard";
 import { formatNumber } from "@/lib/format";
+import { cleanRates, describeTotals, monthKey, monthName, salesOfMonth, sumSales } from "@/lib/sales";
 import {
   accountsOf,
   currentAccount,
@@ -243,6 +244,16 @@ function AvatarCard({ db, avatar }: { db: Db; avatar: Avatar }) {
   const profile = account ? db.profiles.find((p) => p.id === account.profile_id) : undefined;
   const warmupRow = account ? warmupOf(db, account.id) : undefined;
   const warmup = account && warmupRow && isWarmupRunning(account, warmupRow) ? warmupInfo(warmupRow) : null;
+  const today = todayISO();
+  const rates = cleanRates(db.settings?.brl_rates);
+  const month = sumSales(
+    salesOfMonth(
+      db.sales.filter((sale) => sale.avatar_id === avatar.id),
+      monthKey(today),
+    ),
+    rates,
+  );
+  const monthText = describeTotals(month);
   const details = account
     ? [
         account.followers !== null ? `${formatNumber(account.followers)} seguidores` : null,
@@ -296,6 +307,15 @@ function AvatarCard({ db, avatar }: { db: Db; avatar: Avatar }) {
             </p>
           </>
         )}
+        <p className="mt-2.5 flex items-baseline justify-between gap-3 border-t border-line pt-2.5 text-sm">
+          <span className="text-muted">Vendas em {monthName(monthKey(today))}</span>
+          <span className="shrink-0 text-right">
+            <span className="font-semibold tabular-nums">{month.entries === 0 ? "—" : monthText.primary}</span>
+            {month.entries > 0 && monthText.secondary ? (
+              <span className="block text-xs text-muted">{monthText.secondary}</span>
+            ) : null}
+          </span>
+        </p>
       </div>
     </Link>
   );

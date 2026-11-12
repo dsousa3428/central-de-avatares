@@ -106,9 +106,28 @@ async function scanWidth(WIDTH) {
   await p.getByRole('tab', { name: /^Links/ }).click();
   const edits = p.getByRole('button', { name: /^Editar/ });
   if (await edits.count()) { await edits.first().click(); if (await dialog().count()) { await scan('formulário de link (com Apagar)'); await p.screenshot({ path: OUT + `${WIDTH}-link.png` }); await close(); } }
+  await p.getByRole('tab', { name: /^Vendas/ }).click();
+  await scan('avatar · Vendas');
+  await p.getByRole('button', { name: 'Lançar venda' }).click();
+  await scan('lançar venda (pelo avatar)');
+  await p.screenshot({ path: OUT + `${WIDTH}-venda.png` });
+  await close();
+  await p.getByRole('button', { name: /Corrigir a venda da semana/ }).first().click();
+  await scan('venda da semana (com Apagar)'); await close();
+  await p.getByRole('link', { name: 'Vendas' }).click();
+  await p.getByRole('heading', { name: 'Vendas', exact: true }).waitFor();
+  await scan('Vendas');
+  await p.screenshot({ path: OUT + `${WIDTH}-vendas.png`, fullPage: true });
+  await p.getByRole('button', { name: 'Cotações' }).click();
+  await scan('cotações'); await close();
+  await p.getByRole('button', { name: 'Ver tabela' }).click();
+  await scan('Vendas · tabela do gráfico');
   await p.getByRole('link', { name: 'Planilha' }).click();
   await p.getByRole('table').waitFor();
   await scan('Planilha');
+  await p.getByRole('tab', { name: /^Vendas/ }).click();
+  await scan('Planilha · Vendas');
+  await p.getByRole('tab', { name: /^Contas/ }).click();
   await more('Infraestrutura');
   await scan('Infraestrutura');
   await p.getByRole('button', { name: /^Editar/ }).first().click();

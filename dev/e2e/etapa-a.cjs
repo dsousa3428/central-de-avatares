@@ -29,7 +29,7 @@ const { BASE, USER, psql, resetData, ok, section, assert, openPhone, finish, fai
   ok('login correto abre a tela Hoje');
   assert(psql("select count(*) from public.countries where is_example") === '1', 'exemplo Itália criado no banco');
   assert(psql("select count(*) from public.accounts where is_example") === '2', 'duas contas de exemplo criadas');
-  assert(psql("select (prefs->>'examples_version') from public.settings") === '2', 'configurações registram a versão dos exemplos');
+  assert(psql("select (prefs->>'examples_version') from public.settings") === '3', 'configurações registram a versão dos exemplos');
   await overflow('Hoje');
 
   // ---------------------------------------------------------------

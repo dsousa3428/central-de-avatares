@@ -11,7 +11,8 @@ export function ExamplesNotice() {
   const hasExamples =
     db.countries.some((r) => r.is_example) ||
     db.avatars.some((r) => r.is_example) ||
-    db.accounts.some((r) => r.is_example);
+    db.accounts.some((r) => r.is_example) ||
+    db.sales.some((r) => r.is_example);
   if (!hasExamples) return null;
   return (
     <Callout icon={<Sparkles />} className="mb-4">
