@@ -70,6 +70,21 @@ async function scanWidth(WIDTH) {
     console.log(`${found.length ? '✗' : '✓'} ${where}`);
   }
   const close = async () => { await dialog().getByRole('button', { name: 'Cancelar' }).click(); await p.waitForFunction(() => !document.querySelector('dialog[open]')); };
+  // Abre o "Conta caiu" e espera a janela aparecer. O botão fica no fim da aba, abaixo de blocos que ainda
+  // podem mudar de altura enquanto a tela termina de se montar (mais lento com "npm run dev"): se o toque
+  // cair fora por causa disso, tenta de novo.
+  const openFall = async () => {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await p.getByRole('button', { name: 'Conta caiu', exact: true }).click();
+      try {
+        await dialog().getByRole('heading', { name: 'Conta caiu' }).waitFor({ timeout: 4000 });
+        return;
+      } catch {
+        // a janela não abriu: tenta outra vez
+      }
+    }
+    throw new Error('a janela "Conta caiu" não abriu');
+  };
   const more = async (label) => {
     await p.getByRole('button', { name: 'Mais', exact: true }).click();
     await scan('menu Mais');
@@ -99,7 +114,10 @@ async function scanWidth(WIDTH) {
     await t.first().click();
     await scan('avatar · ' + tab);
   }
+  // (a aba troca um instante depois do toque: espera o conteúdo dela antes de tocar em "Editar",
+  //  senão o toque pode cair no "Editar" da aba que ainda está na tela)
   await p.getByRole('tab', { name: /^Aquecimento/ }).click();
+  await p.getByRole('button', { name: 'Reiniciar aquecimento' }).waitFor();
   await p.getByRole('button', { name: 'Editar', exact: true }).click();
   await scan('editar calendário'); await close();
   await p.getByRole('button', { name: 'Editar o dia 5' }).click();
@@ -107,9 +125,10 @@ async function scanWidth(WIDTH) {
   await p.getByRole('button', { name: 'Reiniciar aquecimento' }).click();
   await scan('reiniciar aquecimento'); await close();
   await p.getByRole('tab', { name: /^Conta atual/ }).click();
+  await p.getByText('Esta conta caiu?').waitFor();
   await p.getByRole('button', { name: 'Editar', exact: true }).first().click();
   await scan('formulário da conta'); await close();
-  await p.getByRole('button', { name: 'Conta caiu', exact: true }).click();
+  await openFall();
   await scan('conta caiu (passo 1)'); await close();
   await p.getByRole('tab', { name: /^Links/ }).click();
   const edits = p.getByRole('button', { name: /^Editar/ });
@@ -206,7 +225,7 @@ async function scanWidth(WIDTH) {
   await p.screenshot({ path: OUT + `${WIDTH}-senhas-a-mostra.png`, fullPage: true });
 
   // "Conta caiu" até o fim: a conta nova (reposição), com a confirmação de reuso, e os avisos da tela Hoje
-  await p.getByRole('button', { name: 'Conta caiu', exact: true }).click();
+  await openFall();
   await dialog().getByRole('button', { name: 'Confirmar queda', exact: true }).click();
   await dialog().getByRole('heading', { name: 'Nova conta' }).waitFor();
   await dialog().getByLabel('Celular', { exact: true }).selectOption({ index: 1 });
