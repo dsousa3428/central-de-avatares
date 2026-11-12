@@ -1,0 +1,177 @@
+@import "tailwindcss";
+
+/* Modo escuro controlado pelo atributo data-theme no <html> */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+:root {
+  --bg: #f4f5f8;
+  --surface: #ffffff;
+  --surface-2: #eff1f5;
+  --line: #e1e4ea;
+  --line-strong: #cbd0d9;
+  --fg: #14161c;
+  --muted: #646d7d;
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --primary-fg: #ffffff;
+  --primary-soft: #eceefe;
+  --primary-soft-fg: #3730a3;
+  --danger: #dc2626;
+  --danger-hover: #b91c1c;
+  --ring: #6366f1;
+  --shadow: 0 1px 2px rgb(16 24 40 / 0.05), 0 1px 3px rgb(16 24 40 / 0.06);
+  --shadow-lg: 0 12px 32px rgb(16 24 40 / 0.16);
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --bg: #0b0d12;
+  --surface: #151921;
+  --surface-2: #1d222d;
+  --line: #272d3a;
+  --line-strong: #3a4252;
+  --fg: #eceef3;
+  --muted: #98a1b3;
+  --primary: #6366f1;
+  --primary-hover: #7578f6;
+  --primary-fg: #ffffff;
+  --primary-soft: #23274d;
+  --primary-soft-fg: #c7cdff;
+  --danger: #ef4444;
+  --danger-hover: #f26565;
+  --ring: #818cf8;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-lg: 0 16px 40px rgb(0 0 0 / 0.55);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-fg: var(--primary-fg);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-soft-fg: var(--primary-soft-fg);
+  --color-danger: var(--danger);
+  --color-danger-hover: var(--danger-hover);
+  --color-ring: var(--ring);
+  --shadow-card: var(--shadow);
+  --shadow-pop: var(--shadow-lg);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+/* Trava a rolagem do fundo enquanto uma janela está aberta */
+html:has(dialog[open]) {
+  overflow: hidden;
+}
+
+/* Janelas (modais): no celular sobem de baixo; no computador ficam no centro */
+dialog.cda-dialog {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  background: transparent;
+  color: inherit;
+  overflow: hidden;
+}
+
+dialog.cda-dialog::backdrop {
+  background: rgb(10 12 18 / 0.55);
+  backdrop-filter: blur(2px);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  dialog.cda-dialog[open] .cda-dialog-panel {
+    animation: cda-sheet-in 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  dialog.cda-dialog[open]::backdrop {
+    animation: cda-fade-in 0.2s ease-out;
+  }
+
+  .cda-toast {
+    animation: cda-toast-in 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+}
+
+@keyframes cda-sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes cda-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes cda-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Avisos rápidos (toasts): ficam na "camada do topo", acima das janelas */
+.cda-toast-layer {
+  position: fixed;
+  inset: auto 0 0 0;
+  margin: 0;
+  padding: 0 12px calc(84px + env(safe-area-inset-bottom));
+  border: 0;
+  background: transparent;
+  color: inherit;
+  overflow: visible;
+  pointer-events: none;
+  width: auto;
+  height: auto;
+}
+
+@media (min-width: 768px) {
+  .cda-toast-layer {
+    padding-bottom: 24px;
+  }
+}
+
+/* Barras de rolagem horizontais discretas (abas) */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
