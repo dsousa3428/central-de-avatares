@@ -13,6 +13,7 @@ import { Logo } from "@/components/logo";
 import { Modal } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
 import { useVault } from "@/components/vault/vault-provider";
+import { useWarnings } from "@/components/warnings/use-warnings";
 import { isActive, NAV_ITEMS } from "./nav-items";
 import { usePanelPhase } from "./panel-phase";
 
@@ -60,7 +61,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-dvh md:pl-64">
-      <Sidebar email={email} />
+      <Navigation email={email} />
       <main
         className={cn(
           "mx-auto w-full px-4 pb-[calc(96px+env(safe-area-inset-bottom))] pt-5 md:px-8 md:pb-16 md:pt-8",
@@ -69,8 +70,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       >
         {children}
       </main>
-      <BottomNav />
     </div>
+  );
+}
+
+/**
+ * Os dois menus (lateral no computador, barra embaixo no celular), com o número de
+ * avisos em aberto ao lado de "Hoje". Fica num componente à parte porque os avisos
+ * dependem da data de hoje — e ler a data só é permitido no que é desenhado com os
+ * dados prontos (nunca na parte da moldura que o Next.js pré-renderiza).
+ */
+function Navigation({ email }: { email: string | null }) {
+  const { attention } = useWarnings();
+  return (
+    <>
+      <Sidebar email={email} attention={attention} />
+      <BottomNav attention={attention} />
+    </>
   );
 }
 
@@ -107,7 +123,29 @@ function LockVaultButton({
   return listItem ? <li>{button}</li> : button;
 }
 
-function Sidebar({ email }: { email: string | null }) {
+/** O número de avisos em aberto, ao lado de "Hoje" (é lá que eles ficam). Só o desenho: quem lê é o NavBadgeText. */
+function NavBadge({ count, className }: { count: number; className?: string }) {
+  if (count <= 0) return null;
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1.5 text-[11px] font-semibold leading-none text-white",
+        className,
+      )}
+    >
+      {count > 9 ? "9+" : count}
+    </span>
+  );
+}
+
+/** O mesmo número, por extenso, para leitores de tela — sempre depois do nome do item ("Hoje (3 avisos)"). */
+function NavBadgeText({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return <span className="sr-only">{count === 1 ? " (1 aviso)" : ` (${count} avisos)`}</span>;
+}
+
+function Sidebar({ email, attention }: { email: string | null; attention: number }) {
   const pathname = usePathname();
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-line bg-surface md:flex">
@@ -135,6 +173,12 @@ function Sidebar({ email }: { email: string | null }) {
             >
               <Icon className="size-5" aria-hidden />
               {item.longLabel}
+              {item.href === "/" ? (
+                <>
+                  <NavBadgeText count={attention} />
+                  <NavBadge count={attention} className="ml-auto" />
+                </>
+              ) : null}
             </Link>
           );
         })}
@@ -158,7 +202,7 @@ function Sidebar({ email }: { email: string | null }) {
   );
 }
 
-function BottomNav() {
+function BottomNav({ attention }: { attention: number }) {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
   const barItems = NAV_ITEMS.filter((item) => item.mobile === "bar");
@@ -173,7 +217,7 @@ function BottomNav() {
     );
   const pillClass = (active: boolean) =>
     cn(
-      "flex h-7 w-12 items-center justify-center rounded-full transition-colors",
+      "relative flex h-7 w-12 items-center justify-center rounded-full transition-colors",
       active && "bg-primary-soft text-primary-soft-fg",
     );
 
@@ -192,8 +236,10 @@ function BottomNav() {
                 <Link href={item.href} aria-current={active ? "page" : undefined} className={itemClass(active)}>
                   <span className={pillClass(active)}>
                     <Icon className="size-5" aria-hidden />
+                    {item.href === "/" ? <NavBadge count={attention} className="absolute -right-1.5 -top-1.5" /> : null}
                   </span>
                   {item.label}
+                  {item.href === "/" ? <NavBadgeText count={attention} /> : null}
                 </Link>
               </li>
             );

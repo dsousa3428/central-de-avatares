@@ -34,6 +34,17 @@ export function latestAccount(accounts: Account[]): Account | null {
   return best;
 }
 
+/**
+ * A conta que uma conta nova viria substituir: a geração mais nova, quando ela
+ * caiu e o avatar ficou sem nenhuma conta viva. (Com conta viva, uma conta nova
+ * não é reposição.)
+ */
+export function accountToReplace(accounts: Account[]): Account | null {
+  if (currentAccount(accounts)) return null;
+  const last = latestAccount(accounts);
+  return last && last.status === "caida" ? last : null;
+}
+
 export function nextGeneration(accounts: Account[]): number {
   return accounts.reduce((max, a) => Math.max(max, a.generation), 0) + 1;
 }

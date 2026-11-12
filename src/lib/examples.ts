@@ -10,6 +10,7 @@ import type {
   Account,
   AntidetectProfile,
   Avatar,
+  ChecklistItem,
   Country,
   KitHighlight,
   LabeledLink,
@@ -17,6 +18,7 @@ import type {
   Phone,
   ReferenceProfile,
 } from "./types";
+import { newChecklist } from "./replacement";
 import { accountForWeek, addWeeks, cleanRates, weekStart } from "./sales";
 import type { Db } from "./store";
 import { buildDays, DEFAULT_WARMUP_PLAN } from "./warmup";
@@ -27,7 +29,7 @@ import { buildDays, DEFAULT_WARMUP_PLAN } from "./warmup";
  *  2 = + calendário de aquecimento da conta de exemplo que está aquecendo
  *  3 = + vendas semanais do avatar de exemplo
  */
-export const EXAMPLES_VERSION = 3;
+export const EXAMPLES_VERSION = 4;
 
 async function insertOne<T>(table: string, values: Record<string, unknown>): Promise<T> {
   const { data, error } = await getSupabase().from(table).insert(values).select().single();
@@ -199,6 +201,7 @@ export async function seedExamples(): Promise<void> {
     followers: 37,
     followers_updated_at: new Date().toISOString(),
     notes: "Conta de reposição (exemplo), em aquecimento.",
+    checklist: exampleChecklist(),
   });
 
   const at = (isoDate: string, hour: number) => new Date(`${isoDate}T${String(hour).padStart(2, "0")}:00:00`).toISOString();
@@ -269,6 +272,15 @@ function exampleWarmup(accountId: string, startDate: string, today: string): Rec
   };
 }
 
+/**
+ * O checklist de reposição da conta de exemplo que entrou no lugar da que caiu:
+ * quase tudo feito, faltando os destaques e as provas sociais.
+ */
+function exampleChecklist(): ChecklistItem[] {
+  const pending = new Set(["destaques", "provas"]);
+  return newChecklist().map((item) => ({ ...item, done: !pending.has(item.key) }));
+}
+
 /** Quantas unidades do produto de exemplo (€ 27) foram vendidas em cada semana, da mais antiga para a mais recente. */
 const EXAMPLE_WEEKLY_UNITS = [4, 6, 5, 9, 7, 11, 3, 8];
 const EXAMPLE_PRICE = 27;
@@ -333,6 +345,23 @@ export async function upgradeExamples(db: Db, fromVersion: number): Promise<bool
         today,
         cleanRates(db.settings?.brl_rates).EUR ?? null,
       );
+      changed = true;
+    }
+  }
+  if (fromVersion < 4) {
+    // checklist de reposição na conta de exemplo que entrou no lugar de uma que caiu
+    for (const account of db.accounts) {
+      if (!account.is_example || account.status === "caida" || account.checklist) continue;
+      const replaced = db.accounts.some(
+        (other) => other.avatar_id === account.avatar_id && other.status === "caida" && other.generation < account.generation,
+      );
+      if (!replaced) continue;
+      const { error } = await getSupabase()
+        .from("accounts")
+        .update({ checklist: exampleChecklist() })
+        .eq("id", account.id)
+        .eq("is_example", true);
+      if (error) throw toAppError(error);
       changed = true;
     }
   }

@@ -1,4 +1,13 @@
-import { CalendarCheck, Globe, Settings, Smartphone, Table2, TrendingUp, type LucideIcon } from "lucide-react";
+import {
+  CalendarCheck,
+  Globe,
+  Settings,
+  Smartphone,
+  Table2,
+  TrendingUp,
+  UserRoundX,
+  type LucideIcon,
+} from "lucide-react";
 
 export interface NavItem {
   href: string;
@@ -18,6 +27,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/paises", label: "Países", longLabel: "Países e avatares", icon: Globe, also: ["/avatar"], mobile: "bar" },
   { href: "/planilha", label: "Planilha", longLabel: "Planilha", icon: Table2, mobile: "bar" },
   { href: "/vendas", label: "Vendas", longLabel: "Vendas", icon: TrendingUp, mobile: "bar" },
+  { href: "/quedas", label: "Quedas", longLabel: "Quedas de contas", icon: UserRoundX, mobile: "more" },
   { href: "/infraestrutura", label: "Infra", longLabel: "Infraestrutura", icon: Smartphone, mobile: "more" },
   { href: "/configuracoes", label: "Config", longLabel: "Configurações", icon: Settings, mobile: "more" },
 ];

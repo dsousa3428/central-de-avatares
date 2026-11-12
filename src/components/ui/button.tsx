@@ -1,7 +1,7 @@
 import { LoaderCircle } from "lucide-react";
 import { cn } from "@/lib/format";
 
-type Variant = "primary" | "secondary" | "ghost" | "danger" | "danger-ghost" | "soft";
+type Variant = "primary" | "secondary" | "ghost" | "danger" | "danger-ghost" | "danger-soft" | "soft";
 type Size = "sm" | "md" | "lg";
 
 const VARIANTS: Record<Variant, string> = {
@@ -11,6 +11,8 @@ const VARIANTS: Record<Variant, string> = {
   ghost: "text-fg hover:bg-surface-2",
   danger: "bg-danger text-white shadow-card hover:bg-danger-hover",
   "danger-ghost": "text-danger hover:bg-red-500/10",
+  // fundo avermelhado suave: para uma ação séria que não é "apagar" (ex.: "Conta caiu")
+  "danger-soft": "bg-red-500/10 text-red-700 hover:bg-red-500/15 dark:text-red-300",
 };
 
 const SIZES: Record<Size, string> = {

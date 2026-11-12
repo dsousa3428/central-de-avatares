@@ -18,7 +18,6 @@ import { Segmented } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/toast";
 
 const UPCOMING: Array<{ step: string; title: string; text: string }> = [
-  { step: "e", title: "“Conta caiu” + avisos", text: "Assistente de reposição com checklist e avisos automáticos de risco." },
   { step: "f", title: "App instalável + backup", text: "Instalar no celular, exportar/importar tudo, busca global." },
 ];
 

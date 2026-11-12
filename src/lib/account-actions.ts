@@ -66,3 +66,16 @@ export async function changeAccountStatus(
   );
   await afterStatusChange(account, account.status, next);
 }
+
+/**
+ * "Conta caiu": marca a conta como caída, com a data e o motivo provável.
+ * Registra na linha do tempo e encerra o calendário de aquecimento dela.
+ */
+export async function markAccountFallen(account: Account, fellOn: string, reason: string | null): Promise<void> {
+  await updateRow("accounts", account.id, (row) =>
+    row.status === "caida" && row.fell_on === fellOn && row.fall_reason === reason
+      ? null
+      : { status: "caida" as const, fell_on: fellOn, fall_reason: reason },
+  );
+  await afterStatusChange(account, account.status, "caida", reason);
+}

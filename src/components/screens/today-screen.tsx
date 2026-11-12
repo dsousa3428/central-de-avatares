@@ -11,7 +11,6 @@ import {
   Flame,
   Smartphone,
   Timer,
-  TriangleAlert,
   Undo2,
   UserRound,
 } from "lucide-react";
@@ -19,14 +18,12 @@ import { changeAccountStatus } from "@/lib/account-actions";
 import { formatDateLong, formatDayMonth, todayISO } from "@/lib/dates";
 import { cn } from "@/lib/format";
 import {
-  avatarsWithoutLiveAccount,
   currentAccount,
   generationLabel,
   phoneLabel,
   profileLabel,
   profileShortLabel,
   runningWarmups,
-  warmingWithoutPlan,
   type RunningWarmup,
 } from "@/lib/selectors";
 import { useStore } from "@/lib/store";
@@ -41,6 +38,13 @@ import { Card, EmptyState, Section } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
 import { LateDay } from "@/components/warmup/late-day";
 import { WarmupBar } from "@/components/warmup/warmup-bar";
+import { useWarnings } from "@/components/warnings/use-warnings";
+import { WarningsSection } from "@/components/warnings/warnings-section";
+import type { Warning } from "@/lib/warnings";
+
+// Estes dois avisos têm a sua própria seção nesta tela, com o botão que resolve
+// ("Fiz no dia" / "Empurrar", "Marcar como ativa"): não se repetem na lista de avisos.
+const OWN_SECTION: Array<Warning["kind"]> = ["aquecimento_atrasado", "pronta"];
 
 const STATUS_ORDER: AccountStatus[] = ["aquecendo", "ativa", "restrita", "caida"];
 const STAT_LABEL: Record<AccountStatus, string> = {
@@ -80,8 +84,8 @@ export function TodayScreen() {
   const ready = warmups.filter((w) => w.info.phase === "concluido");
   const endingSoon = warmups.filter((w) => w.info.phase === "em_andamento" && w.info.daysLeft <= 3);
   const scheduled = warmups.filter((w) => w.info.phase === "agendado");
-  const noPlan = warmingWithoutPlan(db);
-  const orphans = avatarsWithoutLiveAccount(db);
+  const warnings = useWarnings();
+  const listed = (list: Warning[]) => list.filter((warning) => !OWN_SECTION.includes(warning.kind));
 
   const counts = useMemo(() => {
     const result: Record<AccountStatus, number> = { aquecendo: 0, ativa: 0, restrita: 0, caida: 0 };
@@ -107,6 +111,8 @@ export function TodayScreen() {
       <ExamplesNotice />
 
       <div className="space-y-4">
+        <WarningsSection active={listed(warnings.active)} dismissed={listed(warnings.dismissed)} />
+
         {late.length > 0 ? (
           <Section title="Atrasados" subtitle="Dias de uso que passaram sem ser marcados.">
             <ul className="space-y-3">
@@ -246,60 +252,31 @@ export function TodayScreen() {
           </Section>
         ) : null}
 
-        {noPlan.length > 0 || orphans.length > 0 ? (
-          <Section title="Avisos">
-            <ul className="divide-y divide-line">
-              {noPlan.map((account) => {
-                const avatar = db.avatars.find((a) => a.id === account.avatar_id);
-                if (!avatar) return null;
-                return (
-                  <li key={account.id}>
-                    <Link
-                      href={warmupHref(avatar.id)}
-                      className="flex items-center gap-3 py-2.5 focus-visible:outline-2 focus-visible:outline-ring"
-                    >
-                      <TriangleAlert className="size-5 shrink-0 text-amber-500" aria-hidden />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate font-medium">
-                          {avatar.name} <span className="text-sm font-normal text-muted">@{account.handle}</span>
-                        </span>
-                        <span className="block text-sm text-muted">Aquecendo sem calendário de aquecimento</span>
-                      </span>
-                      <span className="shrink-0 text-sm font-medium text-primary">Iniciar</span>
-                      <ChevronRight className="size-4 shrink-0 text-muted" aria-hidden />
-                    </Link>
-                  </li>
-                );
-              })}
-              {orphans.map((avatar) => (
-                <li key={avatar.id}>
-                  <Link
-                    href={`/avatar?id=${avatar.id}&aba=conta`}
-                    className="flex items-center gap-3 py-2.5 focus-visible:outline-2 focus-visible:outline-ring"
-                  >
-                    <TriangleAlert className="size-5 shrink-0 text-red-500" aria-hidden />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium">{avatar.name}</span>
-                      <span className="block text-sm text-muted">Avatar ativo sem nenhuma conta em operação</span>
-                    </span>
-                    <span className="shrink-0 text-sm font-medium text-primary">Subir conta</span>
-                    <ChevronRight className="size-4 shrink-0 text-muted" aria-hidden />
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </Section>
-        ) : null}
-
         <ul className="grid grid-cols-4 gap-2 md:gap-3">
-          {STATUS_ORDER.map((status) => (
-            <li key={status}>
+          {STATUS_ORDER.map((status) => {
+            const tile = (
               <Card className="px-1 py-3 text-center md:px-4 md:py-4">
                 <p className={cn("text-2xl font-bold tabular-nums md:text-3xl", STAT_COLOR[status])}>{counts[status]}</p>
                 <p className="mt-0.5 truncate text-[11px] font-medium text-muted sm:text-xs md:text-sm">{STAT_LABEL[status]}</p>
               </Card>
-            </li>
-          ))}
+            );
+            return (
+              <li key={status}>
+                {status === "caida" ? (
+                  // as caídas levam para a tela de quedas (quanto tempo duraram, por país e por motivo)
+                  <Link
+                    href="/quedas"
+                    aria-label={`Caídas: ${counts[status]}. Ver as quedas`}
+                    className="block rounded-2xl transition-opacity hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  >
+                    {tile}
+                  </Link>
+                ) : (
+                  tile
+                )}
+              </li>
+            );
+          })}
         </ul>
 
         <Section title="Contas em operação" subtitle="A conta atual de cada avatar." flush>

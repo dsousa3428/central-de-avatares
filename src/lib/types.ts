@@ -162,6 +162,7 @@ export type ActivityKind =
   | "aquecimento_empurrado"
   | "aquecimento_concluido"
   | "senhas_atualizadas"
+  | "reposicao_concluida"
   | "nota";
 
 export interface ActivityEntry extends BaseRow {
@@ -178,6 +179,8 @@ export interface AppPrefs {
   examples_version?: number;
   /** Minutos sem uso até o cofre de senhas trancar sozinho (padrão: 5). */
   vault_lock_minutes?: number;
+  /** Avisos automáticos que o dono dispensou (ids; ver src/lib/warnings.ts). */
+  ignored_warnings?: string[];
 }
 
 export interface Settings {

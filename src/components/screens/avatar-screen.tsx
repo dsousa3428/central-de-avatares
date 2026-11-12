@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeft, Pencil, Trash2, UserRoundX } from "lucide-react";
-import { accountsOf, currentAccount } from "@/lib/selectors";
+import { accountsOf, accountToReplace, currentAccount } from "@/lib/selectors";
 import { deleteRow, useStore } from "@/lib/store";
 import type { Avatar } from "@/lib/types";
 import { setSelectedCountry } from "@/lib/ui-state";
@@ -181,7 +181,13 @@ function AvatarContent({ avatar, tab }: { avatar: Avatar; tab: TabValue }) {
       </div>
 
       {editing ? <AvatarForm avatar={avatar} onClose={() => setEditing(false)} /> : null}
-      {creatingAccount ? <AccountForm avatar={avatar} onClose={() => setCreatingAccount(false)} /> : null}
+      {creatingAccount ? (
+        <AccountForm
+          avatar={avatar}
+          replacing={accountToReplace(accounts) ?? undefined}
+          onClose={() => setCreatingAccount(false)}
+        />
+      ) : null}
     </>
   );
 }

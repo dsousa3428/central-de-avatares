@@ -23,6 +23,10 @@ const S = SHOTS + '/';
   psql(`update public.countries set warmup_tags = warmup_tags || array['#${long}${long}${long}'], notes = '${long}${long}${long}${long}'`);
   psql(`update public.accounts set status = 'aquecendo' where handle like 'dottoressa%'`);
   const acc = psql("select id from public.accounts where handle like 'dottoressa%'");
+  // checklist de reposição (com o kit de textos longos ao lado) e uma conta caída no mesmo celular, perfil e
+  // proxy, com um motivo sem espaços: avisos de reuso na tela Hoje e a tela de quedas com nomes compridos
+  psql(`update public.accounts set checklist = '[{"key":"email","label":"Criar o e-mail","done":true},{"key":"perfil","label":"Novo perfil no anti-detect","done":false},{"key":"proxy","label":"Novo proxy","done":false},{"key":"celular","label":"Celular","done":false},{"key":"bio","label":"Bio","done":false},{"key":"link","label":"Link da bio","done":false},{"key":"destaques","label":"Destaques","done":false},{"key":"provas","label":"Provas sociais","done":false},{"key":"aquecimento","label":"Iniciar o aquecimento","done":false}]'::jsonb where id = '${acc}'`);
+  psql(`insert into public.accounts (user_id, avatar_id, generation, handle, status, phone_id, profile_id, proxy, created_on, fell_on, fall_reason) values ('${uid}', '${aid}', 2, 'dottoressa.${long.toLowerCase()}.${long.toLowerCase()}', 'caida', '${pid}', '${prid}', 'usuario:senha@${long}${long}.exemplo.net:8000', current_date - 400, current_date - 3, '${long}${long}${long}')`);
   psql(`insert into public.warmups (user_id, account_id, start_date, total_days, days) values ('${uid}', '${acc}', current_date, 3, ('[{"n":1,"date":"' || current_date || '","use":true,"minutes":600,"task":"${long}${long}${long} ${long}${long}${long}","done":false,"done_at":null},{"n":2,"date":"' || (current_date + 1) || '","use":false,"minutes":0,"task":"","done":false,"done_at":null},{"n":3,"date":"' || (current_date + 2) || '","use":true,"minutes":15,"task":"","done":false,"done_at":null}]')::jsonb)`);
   // vendas com valores enormes, em moedas diferentes, e uma observação sem espaços
   psql(`insert into public.weekly_sales (user_id, avatar_id, account_id, week_start, amount, currency, sales_count, notes) values ('${uid}', '${aid}', '${acc}', date_trunc('week', current_date)::date, 987654321.99, 'CLP', 123456789, '${long}${long}${long}'), ('${uid}', '${aid}', '${acc}', date_trunc('week', current_date)::date - 7, 123456789.5, 'HUF', 7, null)`);
@@ -47,12 +51,18 @@ const S = SHOTS + '/';
     await check(name);
   }
   await page.getByRole('tab', { name: /^Conta atual/ }).click();
+  const checkDialog = async (name) => {
+    await page.waitForTimeout(500);
+    const extra = await page.evaluate(() => { const p = document.querySelector('dialog[open] .cda-dialog-panel'); const b = p.querySelector('.overflow-y-auto'); return b.scrollWidth - b.clientWidth; });
+    results.push(`${extra > 0 ? '✗' : '✓'} ${name}${extra > 0 ? ` (sobra ${extra}px)` : ''}`);
+    await page.screenshot({ path: `${S}90-stress-${name}.png` });
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('dialog[open]'));
+  };
   await page.getByRole('button', { name: 'Editar', exact: true }).click();
-  await page.waitForTimeout(500);
-  const dlgExtra = await page.evaluate(() => { const p = document.querySelector('dialog[open] .cda-dialog-panel'); const b = p.querySelector('.overflow-y-auto'); return b.scrollWidth - b.clientWidth; });
-  results.push(`${dlgExtra > 0 ? '✗' : '✓'} formulario-conta${dlgExtra > 0 ? ` (sobra ${dlgExtra}px)` : ''}`);
-  await page.screenshot({ path: `${S}90-stress-form-conta.png` });
-  await page.keyboard.press('Escape');
+  await checkDialog('formulario-conta');
+  await page.getByRole('button', { name: 'Conta caiu', exact: true }).click();
+  await checkDialog('formulario-conta-caiu');
   await page.getByRole('link', { name: 'Planilha' }).click();
   await page.getByRole('heading', { name: 'Planilha' }).waitFor();
   await check('planilha-contas');
@@ -63,6 +73,10 @@ const S = SHOTS + '/';
   await page.getByRole('link', { name: 'Vendas' }).click();
   await page.getByRole('heading', { name: 'Vendas', exact: true }).waitFor();
   await check('vendas');
+  await page.getByRole('button', { name: 'Mais', exact: true }).click();
+  await page.locator('dialog[open]').getByRole('link', { name: 'Quedas de contas' }).click();
+  await page.getByRole('heading', { name: 'Quedas', exact: true }).waitFor();
+  await check('quedas');
   await s.more('Infraestrutura');
   await check('infra-celulares');
   await page.getByRole('tab', { name: /Perfis anti-detect/ }).click();

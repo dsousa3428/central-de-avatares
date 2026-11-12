@@ -234,9 +234,9 @@ const exampleDay = (n, field) => psql(`select d->>'${field}' from public.warmups
   const nonna = psql("select id from public.accounts where handle = 'nonna.rosa'");
   psql(`delete from public.warmups where account_id = '${nonna}'`);
   await page.reload();
-  await page.getByText("Aquecendo sem calendário de aquecimento").waitFor({ timeout: 20000 });
+  await page.getByText(/@nonna\.rosa: aquecendo sem calendário/).waitFor({ timeout: 20000 });
   ok("avisa que a conta está aquecendo sem calendário");
-  await page.getByRole("link", { name: /Nonna Rosa.*Aquecendo sem calendário/ }).click();
+  await page.getByRole("link", { name: /Nonna Rosa.*aquecendo sem calendário/ }).click();
   await page.getByRole("button", { name: "Iniciar aquecimento" }).click();
   await dialog().getByLabel("Duração (dias)").fill("6");
   await save("Iniciar");
@@ -290,7 +290,7 @@ const exampleDay = (n, field) => psql(`select d->>'${field}' from public.warmups
   await page.locator("li", { hasText: "dia 5 de 10" }).first().getByRole("button", { name: "Feito", exact: true }).waitFor({ timeout: 20000 });
   ok("a tela Hoje mostra a tarefa de exemplo do dia, mesmo com o exemplo criado há muito tempo");
   assert(psql("select count(*) from public.warmups where is_example and finished_at is null") === "1", "o exemplo de versão antiga ganha o calendário de aquecimento");
-  assert(psql("select prefs->>'examples_version' from public.settings") === "3", "a versão dos exemplos é atualizada");
+  assert(psql("select prefs->>'examples_version' from public.settings") === "4", "a versão dos exemplos é atualizada");
 
   resetData();
   await finish(session);

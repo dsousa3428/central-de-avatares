@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { TriangleAlert } from "lucide-react";
 import { formatDate, isValidISODate, todayISO } from "@/lib/dates";
 import { clean, normalizeHandle, parseCount } from "@/lib/format";
-import { FALL_REASONS } from "@/lib/reference";
+import { factsOf, newChecklist, readChecklist, syncChecklist } from "@/lib/replacement";
 import {
   accountsOf,
   describeAccount,
@@ -21,6 +21,7 @@ import { afterStatusChange } from "@/lib/account-actions";
 import { insertRow, logActivity, updateRow, useStore, type Db } from "@/lib/store";
 import { describePlan, planFromSettings } from "@/lib/warmup";
 import { startWarmup } from "@/lib/warmup-actions";
+import { acknowledgeReuse } from "@/lib/warning-actions";
 import type { Account, AccountStatus, Avatar, RowPatch } from "@/lib/types";
 import { invalid } from "@/components/common/validation";
 import { PhoneForm } from "@/components/infra/phone-form";
@@ -30,6 +31,7 @@ import { Callout } from "@/components/ui/card";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
 import { FormModal } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
+import { checkFallDate, FallFields } from "./fall-fields";
 
 const NEW = "__novo__";
 
@@ -38,6 +40,11 @@ interface AccountFormProps {
   account?: Account;
   /** Abre o formulário já com este status escolhido (ex.: marcar como caída). */
   initialStatus?: AccountStatus;
+  /**
+   * Reposição: a conta nova entra no lugar desta, que caiu. A conta nova ganha o
+   * checklist de reposição (só vale ao criar).
+   */
+  replacing?: Account;
   onClose: () => void;
   onSaved?: (account: Account) => void;
 }
@@ -50,10 +57,13 @@ function withoutSelf(usage: Usage | undefined, selfId: string | undefined): Usag
   };
 }
 
+/** O que aparece ao lado de um celular ou perfil na lista: " · em uso", " · usado por conta caída" (ou os dois). */
 function usageSuffix(usage: Usage): string {
-  if (usage.live.length > 0) return " · em uso";
-  if (usage.fallen.length > 0) return " · usado por conta caída";
-  return "";
+  const notes = [usage.live.length > 0 ? "em uso" : null, usage.fallen.length > 0 ? "usado por conta caída" : null];
+  return notes
+    .filter(Boolean)
+    .map((note) => ` · ${note}`)
+    .join("");
 }
 
 /** Aviso quando o celular/perfil/proxy escolhido já foi (ou está sendo) usado por outra conta. */
@@ -79,8 +89,14 @@ function ReuseWarning({ what, usage, db }: { what: string; usage: Usage; db: Db 
   );
 }
 
+/** "o celular e o proxy", "o celular, o perfil e o proxy" */
+function joinWords(words: string[]): string {
+  if (words.length <= 1) return words.join("");
+  return `${words.slice(0, -1).join(", ")} e ${words[words.length - 1]}`;
+}
+
 /** Criar ou editar uma conta (geração) de um avatar. */
-export function AccountForm({ avatar, account, initialStatus, onClose, onSaved }: AccountFormProps) {
+export function AccountForm({ avatar, account, initialStatus, replacing, onClose, onSaved }: AccountFormProps) {
   const db = useStore();
   const toast = useToast();
 
@@ -103,6 +119,8 @@ export function AccountForm({ avatar, account, initialStatus, onClose, onSaved }
   const [fallReason, setFallReason] = useState(account?.fall_reason ?? "");
   const [creating, setCreating] = useState<"phone" | "profile" | null>(null);
   const [withWarmup, setWithWarmup] = useState(true);
+  // a confirmação de reuso vale para a escolha em que foi marcada: trocar celular, perfil ou proxy pede de novo
+  const [reuseConfirmedFor, setReuseConfirmedFor] = useState("");
   const warmupPlan = planFromSettings(db.settings);
 
   const phoneUsage = useMemo(() => usageByPhone(db), [db]);
@@ -112,6 +130,32 @@ export function AccountForm({ avatar, account, initialStatus, onClose, onSaved }
   const selfId = account?.id;
   const fallen = status === "caida";
   const proxyKey = normalizeProxy(proxy);
+
+  // Celular, perfil ou proxy que já foram de uma conta que caiu só entram com confirmação.
+  // (Na edição, só o que foi trocado agora: o que a conta já tinha não é perguntado de novo.)
+  const reused: Array<{ key: string; word: string }> = [];
+  if (!fallen) {
+    if (phoneId && phoneId !== (account?.phone_id ?? "") && withoutSelf(phoneUsage.get(phoneId), selfId).fallen.length > 0) {
+      reused.push({ key: `celular:${phoneId}`, word: "o celular" });
+    }
+    if (
+      profileId &&
+      profileId !== (account?.profile_id ?? "") &&
+      withoutSelf(profileUsage.get(profileId), selfId).fallen.length > 0
+    ) {
+      reused.push({ key: `perfil:${profileId}`, word: "o perfil" });
+    }
+    if (
+      proxyKey &&
+      proxyKey !== normalizeProxy(account?.proxy) &&
+      withoutSelf(proxyUsage.get(proxyKey), selfId).fallen.length > 0
+    ) {
+      reused.push({ key: `proxy:${proxyKey}`, word: "o proxy" });
+    }
+  }
+  const reuseKey = reused.map((item) => item.key).join("|");
+  const reuseWords = joinWords(reused.map((item) => item.word));
+  const reuseConfirmed = reused.length === 0 || reuseConfirmedFor === reuseKey;
 
   function chooseProfile(id: string) {
     if (id === NEW) {
@@ -139,10 +183,11 @@ export function AccountForm({ avatar, account, initialStatus, onClose, onSaved }
     if (!isValidISODate(createdOn)) invalid("Informe uma data de criação válida.");
     if (createdOn > today) invalid("A data de criação não pode ser no futuro.");
     if (createdOn < "2010-01-01") invalid("Confira o ano da data de criação.");
-    if (fallen) {
-      if (!isValidISODate(fellOn)) invalid("Informe uma data válida para a queda da conta.");
-      if (fellOn > today) invalid("A data da queda não pode ser no futuro.");
-      if (fellOn < createdOn) invalid("A data da queda não pode ser anterior à data de criação.");
+    if (fallen) checkFallDate(fellOn, createdOn);
+    if (!reuseConfirmed) {
+      invalid(
+        `Você escolheu ${reuseWords} de uma conta que caiu. Troque por outro ou marque a confirmação no fim do formulário.`,
+      );
     }
     const followersNumber = followers.trim() ? parseCount(followers) : null;
     if (followers.trim() && followersNumber === null) {
@@ -170,12 +215,16 @@ export function AccountForm({ avatar, account, initialStatus, onClose, onSaved }
         ...values,
         avatar_id: avatar.id,
         followers_updated_at: followersNumber !== null ? new Date().toISOString() : null,
+        // reposição: a conta nova já nasce com o checklist (o que os dados dela respondem vem marcado)
+        ...(replacing && !fallen ? { checklist: syncChecklist(newChecklist(), factsOf(values, false)) } : {}),
       });
       await logActivity({
         avatar_id: avatar.id,
         account_id: row.id,
         kind: "conta_criada",
-        message: `Conta criada (${generationLabel(gen)})`,
+        message: replacing
+          ? `Conta criada (${generationLabel(gen)}) no lugar da ${generationLabel(replacing.generation)}, que caiu`
+          : `Conta criada (${generationLabel(gen)})`,
       });
       if (fallen) {
         await logActivity({ avatar_id: avatar.id, account_id: row.id, kind: "caiu", message: fallMessage });
@@ -188,7 +237,8 @@ export function AccountForm({ avatar, account, initialStatus, onClose, onSaved }
           toast.error(err);
         }
       }
-      toast.success("Conta criada");
+      if (reused.length > 0) await acknowledgeReuse(row.id).catch(() => undefined);
+      toast.success(replacing && !fallen ? "Conta criada. Siga o checklist de reposição." : "Conta criada");
       onSaved?.(row);
       return;
     }
@@ -203,15 +253,17 @@ export function AccountForm({ avatar, account, initialStatus, onClose, onSaved }
     if ("followers" in patch) patch.followers_updated_at = new Date().toISOString();
     if (Object.keys(patch).length === 0) return;
 
-    await updateRow("accounts", account.id, patch);
+    await updateRow("accounts", account.id, (row) => {
+      // conta de reposição: o que acabou de ser preenchido (e-mail, perfil, proxy, celular) marca o checklist
+      const list = readChecklist(row.checklist);
+      if (!list) return patch;
+      const synced = syncChecklist(list, factsOf({ ...row, ...patch }, false));
+      return synced === list ? patch : { ...patch, checklist: synced };
+    });
     if (patch.status) await afterStatusChange(account, account.status, status, values.fall_reason);
+    if (reused.length > 0) await acknowledgeReuse(account.id).catch(() => undefined);
     toast.success("Conta atualizada");
   }
-
-  const reasonSuggestions = useMemo(() => {
-    const used = db.accounts.map((a) => a.fall_reason).filter((r): r is string => Boolean(r));
-    return [...new Set([...used, ...FALL_REASONS])].slice(0, 8);
-  }, [db.accounts]);
 
   return (
     <>
@@ -220,7 +272,11 @@ export function AccountForm({ avatar, account, initialStatus, onClose, onSaved }
         description={
           account
             ? undefined
-            : `Uma nova geração do avatar ${avatar.name}. O @ já vem preenchido com o da conta anterior.`
+            : replacing
+              ? `Passo 2 de 2 · Reposição de @${replacing.handle} (${generationLabel(replacing.generation)})${
+                  replacing.fell_on ? `, que caiu em ${formatDate(replacing.fell_on)}` : ""
+                }. O @ já vem preenchido; e-mail, celular, perfil e proxy começam em branco, para você colocar os novos.`
+              : `Uma nova geração do avatar ${avatar.name}. O @ já vem preenchido com o da conta anterior.`
         }
         onClose={onClose}
         onSubmit={submit}
@@ -257,29 +313,7 @@ export function AccountForm({ avatar, account, initialStatus, onClose, onSaved }
 
         {fallen ? (
           <div className="space-y-4 rounded-2xl border border-red-500/30 bg-red-500/5 p-3.5">
-            <Field label="Data da queda">
-              <Input type="date" value={fellOn} max={todayISO()} onChange={(e) => setFellOn(e.target.value)} />
-            </Field>
-            <Field label="Motivo provável" optional>
-              <Input
-                value={fallReason}
-                onChange={(e) => setFallReason(e.target.value)}
-                placeholder="O que você acha que causou a queda"
-                autoComplete="off"
-              />
-            </Field>
-            <div className="flex flex-wrap gap-1.5">
-              {reasonSuggestions.map((reason) => (
-                <button
-                  key={reason}
-                  type="button"
-                  onClick={() => setFallReason(reason)}
-                  className="rounded-full border border-line bg-surface px-2.5 py-1 text-xs text-muted transition-colors hover:text-fg"
-                >
-                  {reason}
-                </button>
-              ))}
-            </div>
+            <FallFields fellOn={fellOn} onFellOn={setFellOn} reason={fallReason} onReason={setFallReason} />
           </div>
         ) : null}
 
@@ -363,6 +397,24 @@ export function AccountForm({ avatar, account, initialStatus, onClose, onSaved }
           <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
         </Field>
 
+        {reused.length > 0 ? (
+          <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-red-500/40 bg-red-500/5 p-3.5">
+            <input
+              type="checkbox"
+              checked={reuseConfirmed}
+              onChange={(e) => setReuseConfirmedFor(e.target.checked ? reuseKey : "")}
+              className="mt-0.5 size-5 shrink-0 accent-[var(--danger)]"
+            />
+            <span className="text-sm leading-relaxed">
+              <span className="font-medium">Reutilizar {reuseWords} de conta que caiu</span>
+              <span className="block text-muted">
+                Sem marcar, o painel não salva. Reutilizar pode vincular esta conta à que caiu: o mais seguro é
+                escolher outro.
+              </span>
+            </span>
+          </label>
+        ) : null}
+
         {!account && status === "aquecendo" ? (
           <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-line bg-surface-2/60 p-3.5">
             <input
@@ -381,6 +433,9 @@ export function AccountForm({ avatar, account, initialStatus, onClose, onSaved }
         ) : null}
 
         <p className="text-xs leading-relaxed text-muted">
+          {replacing && !account
+            ? "Depois de salvar, o checklist de reposição aparece na aba Conta atual, com o kit ao lado de cada passo. "
+            : ""}
           As senhas e os códigos de backup ficam no cofre: depois de salvar, abra “Senhas e códigos” na aba Conta
           atual.
         </p>

@@ -141,7 +141,7 @@ const REST = "**/rest/v1/**";
   await page.getByLabel("Status da conta").selectOption("caida");
   await dialog().getByLabel("Motivo provável").fill("Motivo digitado com cuidado");
   await offline();
-  await save();
+  await save("Confirmar queda");
   await dialog().getByText("Sem conexão com o servidor").waitFor({ timeout: 8000 });
   assert(
     (await dialog().getByLabel("Motivo provável").inputValue()) === "Motivo digitado com cuidado",
@@ -149,8 +149,11 @@ const REST = "**/rest/v1/**";
   );
   assert(psql("select status from public.accounts where generation = 2") === "aquecendo", "nada foi gravado no banco");
   await online();
-  await save();
-  await toast("Conta atualizada");
+  await save("Confirmar queda");
+  await toast("Conta marcada como caída");
+  // (em seguida abre a criação da nova geração; aqui ela fica para depois)
+  await dialog().getByRole("heading", { name: "Nova conta" }).waitFor();
+  await dialog().getByRole("button", { name: "Cancelar" }).click();
   await noDialog();
   await page.getByText("Nenhuma conta ativa").waitFor();
   assert(

@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Coins, TriangleAlert } from "lucide-react";
-import { todayISO } from "@/lib/dates";
+import { isValidISODate, todayISO } from "@/lib/dates";
 import { plural } from "@/lib/format";
 import {
   addWeeks,
@@ -26,7 +27,7 @@ import {
 import { useStore } from "@/lib/store";
 import type { WeeklySale } from "@/lib/types";
 import { ExamplesNotice } from "@/components/common/examples-notice";
-import { RankedList, type RankedRow } from "@/components/sales/ranked-list";
+import { RankedList, type RankedRow } from "@/components/common/ranked-list";
 import { RatesForm } from "@/components/sales/rates-form";
 import { useRates } from "@/components/sales/use-rates";
 import { WeekChart } from "@/components/sales/week-chart";
@@ -57,6 +58,21 @@ export function SalesScreen() {
   const thisWeek = weekStart(today);
 
   const [week, setWeek] = useState(thisWeek);
+  // Um aviso de "semana sem lançamento" abre esta tela com ?semana=AAAA-MM-DD (uma segunda-feira).
+  // O endereço é só o pedido de chegada: a semana pedida é adotada uma vez e sai do endereço, e daí
+  // em diante quem manda são as setas. (A troca pelas setas fica só na memória da tela de propósito:
+  // ela precisa ser imediata — se dependesse do endereço, um valor digitado logo depois de trocar de
+  // semana poderia cair na linha da semana antiga, que ainda estaria na tela por um instante.)
+  const param = useSearchParams().get("semana");
+  const asked = isValidISODate(param) && weekStart(param) === param && param <= thisWeek ? param : null;
+  const [adopted, setAdopted] = useState<string | null>(null);
+  if (asked !== adopted) {
+    setAdopted(asked);
+    if (asked) setWeek(asked);
+  }
+  useEffect(() => {
+    if (param !== null) window.history.replaceState(null, "", "/vendas");
+  }, [param]);
   const [period, setPeriod] = useState<Period>("12");
   const [pickedCountry, setPickedCountry] = useState("");
   const [editingRates, setEditingRates] = useState(false);

@@ -29,7 +29,7 @@ const { BASE, USER, psql, resetData, ok, section, assert, openPhone, finish, fai
   ok('login correto abre a tela Hoje');
   assert(psql("select count(*) from public.countries where is_example") === '1', 'exemplo Itália criado no banco');
   assert(psql("select count(*) from public.accounts where is_example") === '2', 'duas contas de exemplo criadas');
-  assert(psql("select (prefs->>'examples_version') from public.settings") === '3', 'configurações registram a versão dos exemplos');
+  assert(psql("select (prefs->>'examples_version') from public.settings") === '4', 'configurações registram a versão dos exemplos');
   await overflow('Hoje');
 
   // ---------------------------------------------------------------
@@ -126,15 +126,19 @@ const { BASE, USER, psql, resetData, ok, section, assert, openPhone, finish, fai
   await page.getByText('1.250').first().waitFor();
   assert(psql("select followers::text || '|' || status from public.accounts where handle='abuela.carmen'") === '1250|ativa', 'seguidores 1.250 e status ativa gravados');
 
+  // "Caída" no seletor abre o "Conta caiu": passo 1 (data e motivo) e, em seguida, a conta nova
   await page.getByLabel('Status da conta').selectOption('caida');
   await dialog().getByLabel('Data da queda').waitFor();
   await dialog().getByRole('button', { name: 'Denúncias' }).click();
   await shot('26-form-conta-caida');
-  await save();
-  await toast('Conta atualizada');
+  await save('Confirmar queda');
+  await toast('Conta marcada como caída');
+  await dialog().getByRole('heading', { name: 'Nova conta' }).waitFor();
+  ok('depois de confirmar a queda, abre sozinha a criação da nova geração');
+  await dialog().getByRole('button', { name: 'Cancelar' }).click();
   await noDialog();
   await page.getByText('Nenhuma conta ativa').waitFor();
-  ok('depois da queda, a aba mostra “Nenhuma conta ativa”');
+  ok('deixando para depois, a aba mostra “Nenhuma conta ativa” (com o botão para subir a nova)');
   assert(psql("select status || '|' || fall_reason || '|' || (fell_on is not null) from public.accounts where handle='abuela.carmen'") === 'caida|Denúncias|true', 'queda gravada com data e motivo');
   assert(psql("select count(*) from public.activity_log where kind='caiu' and not is_example") === '1', 'linha do tempo registrou a queda');
 

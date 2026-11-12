@@ -1,6 +1,6 @@
 # Central de Avatares
 
-Painel **privado**, de um único usuário, para organizar contas de Instagram de avatares de IA em vários países: países, avatares, contas (gerações), aquecimento com tarefas do dia, cofre de senhas, vendas semanais, celulares, perfis do navegador anti-detect, links, kit de reposição e uma visão em planilha de tudo.
+Painel **privado**, de um único usuário, para organizar contas de Instagram de avatares de IA em vários países: países, avatares, contas (gerações), aquecimento com tarefas do dia, cofre de senhas, vendas semanais, reposição de contas que caem (com checklist), avisos automáticos de risco, celulares, perfis do navegador anti-detect, links, kit de reposição e uma visão em planilha de tudo.
 
 > O painel é só de organização. Ele **não acessa o Instagram**, não automatiza nada e não faz login em conta nenhuma.
 
@@ -13,7 +13,7 @@ Painel **privado**, de um único usuário, para organizar contas de Instagram de
 | **+** | Planilha: tudo em tabela, com edição nas células, filtros e exportação | ✅ pronta |
 | **c** | Cofre de senhas (criptografia no aparelho, com senha-mestra) | ✅ pronta |
 | **d** | Vendas semanais, totais, gráfico, ranking, conversão para BRL | ✅ pronta |
-| **e** | Botão "Conta caiu" + assistente de reposição + avisos automáticos | a fazer |
+| **e** | Botão "Conta caiu" + assistente de reposição com checklist + avisos automáticos + quedas | ✅ pronta |
 | **f** | App instalável (PWA), backup (exportar/importar), busca global | a fazer |
 
 ---
@@ -122,9 +122,12 @@ Daqui para frente, toda atualização enviada ao GitHub é publicada sozinha pel
 ## Como usar
 
 - **Hoje** — o que fazer no dia: quais contas em aquecimento usar, por quantos minutos, em qual celular e em qual perfil do anti-detect, com o botão **Feito**. Mostra também os dias atrasados, as contas que hoje descansam, os aquecimentos que terminam em breve e as contas prontas para operar.
+  - **Avisos** (no topo da tela Hoje): o painel percebe sozinho o mesmo celular, perfil anti-detect ou proxy em duas contas ao mesmo tempo, ou igual ao de uma conta que caiu; avatar ativo sem conta em operação; conta aquecendo sem calendário; vendas da semana passada sem lançamento; e reposição com checklist pela metade. Cada aviso leva para onde se resolve e some quando o problema acaba. O **X** dispensa um aviso (ele volta se a situação mudar, e os dispensados ficam à mão no fim da lista). O número vermelho ao lado de **Hoje**, no menu, conta os avisos em aberto.
 - **Países** — uma aba por país. No topo ficam as tags de aquecimento (toque numa tag para copiar, ou em *Copiar todas*). Abaixo, os avatares do país, com a barra de progresso do aquecimento e as vendas do mês.
 - **Avatar** — toque em um avatar para abrir a página dele, com as seções: Visão geral · Conta atual · Aquecimento · Links · Vídeos para modelar · Perfis de exemplo · Kit de reposição · Vendas · Histórico · Anotações.
-- **Contas** — cada conta é uma *geração* do avatar. Quando uma cai, mude o status para **Caída** (o painel pede data e motivo) e crie a próxima geração: o @ já vem preenchido.
+- **Contas** — cada conta é uma *geração* do avatar.
+- **Conta caiu** — na aba *Conta atual*, toque em **Conta caiu** (ou mude o status para *Caída*). Passo 1: a data e o motivo provável. Passo 2: a nova geração, com o mesmo @ já preenchido e e-mail, celular, perfil e proxy em branco. Se você escolher o celular, o perfil ou o proxy de uma conta que caiu, o painel **não salva** enquanto você não marcar a confirmação. Dá para deixar a conta nova para depois: o aviso "sem conta em operação" leva de volta. A conta nova ganha o **checklist de reposição** (criar o e-mail, novo perfil, novo proxy, celular, bio, link, destaques, provas sociais, iniciar o aquecimento), com o que está no kit de reposição ao lado de cada passo, pronto para copiar. O painel marca sozinho o que os dados da conta já respondem; o resto você marca.
+- **Quedas** — quanto tempo as contas duraram: média geral, por país e por motivo da queda, e a lista das contas que caíram. No celular fica no botão **Mais** (ou toque no contador de *Caídas* da tela Hoje).
 - **Aquecimento** — toda conta nova nasce com um calendário (padrão: 10 dias, usa nos dias 1, 3, 5, 7 e 9 e descansa nos pares). Dá para ajustar cada dia (minutos, o que fazer, uso ou descanso), a data de início e a duração. A data de fim é calculada sozinha. Se um dia de uso passar sem marcar, o painel pergunta: **Fiz no dia** ou **Não fiz: empurrar para hoje** — e recalcula o fim. Quando a conta sai do status *Aquecendo*, o calendário é encerrado; se ela voltar para *Aquecendo*, ele continua de onde parou. O padrão para contas novas fica em Configurações.
 - **Cofre de senhas** — na aba *Conta atual* de cada avatar há o bloco **Senhas e códigos**: senha do Instagram, senha do e-mail, e-mail de recuperação e códigos de backup/2FA. Na primeira vez você cria a **senha-mestra**; depois é só destrancar. Os campos ficam escondidos, com botões de **mostrar** e **copiar**. O cofre tranca sozinho depois de alguns minutos sem uso (o tempo fica em Configurações), ao recarregar a página e ao sair. Contas antigas têm o mesmo bloco no *Histórico* (ícone da chave).
 - **Vendas** — toda semana (de segunda a domingo), digite quanto cada avatar vendeu: escolha a semana com as setas, escreva o valor na linha do avatar e aperte Enter (o cursor já desce para o avatar de baixo: dá para digitar tudo em sequência). Os três pontinhos abrem os detalhes (quantidade de vendas, observação, qual conta estava no ar, moeda e cotação daquela venda). A tela mostra os totais da semana, do mês e do período, o gráfico por semana (no celular, arraste o dedo sobre ele para passar pelas semanas), o ranking de avatares e os totais por país. O mês de uma semana é aquele em que cai a maior parte dos dias dela: a semana de 30 de novembro a 6 de dezembro conta para dezembro.
@@ -134,7 +137,7 @@ Daqui para frente, toda atualização enviada ao GitHub é publicada sozinha pel
 - **Configurações** — tema claro/escuro, cofre de senhas (criar ou trocar a senha-mestra, trancar, tempo para trancar sozinho), padrão de aquecimento, apagar (ou recriar) os dados de exemplo e sair. No celular fica no botão **Mais**.
 - **Exemplos** — Itália e Fra' Salvio vêm com dados fictícios. Se quiser aproveitar um exemplo como dado seu, abra o avatar (ou o país) e toque em **Ficar com este avatar / país**: ele deixa de ser exemplo e não é mais apagado em "Apagar exemplos".
 
-O painel avisa quando você escolhe um celular, perfil ou proxy que já está em uso por outra conta, ou que foi usado por uma conta que caiu.
+O painel avisa quando você escolhe um celular, perfil ou proxy que já está em uso por outra conta, e pede confirmação para usar um que foi de uma conta que caiu.
 
 ## Segurança e privacidade
 

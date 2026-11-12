@@ -3,6 +3,7 @@
 // Ações do aquecimento que gravam no banco (as regras ficam em ./warmup).
 
 import { daysBetween, formatDate, todayISO } from "./dates";
+import { syncAccountChecklist } from "./replacement-actions";
 import { getStore, insertRow, logActivity, updateRow, type UpdateOptions } from "./store";
 import type { Account, Warmup, WarmupDay } from "./types";
 import {
@@ -42,6 +43,12 @@ export async function startWarmup(account: Account, startDate: string, plan: War
     message: `Aquecimento iniciado (${plural(days.length, "dia", "dias")}, fim previsto em ${formatDate(endOf(days))})`,
     is_example: account.is_example,
   });
+  // conta de reposição: o passo "Iniciar o aquecimento" do checklist fica feito
+  try {
+    await syncAccountChecklist(account.id, { aquecimento: true });
+  } catch (err) {
+    console.warn("Não foi possível atualizar o checklist de reposição:", err);
+  }
   return row;
 }
 

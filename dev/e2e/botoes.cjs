@@ -103,6 +103,8 @@ async function scanWidth(WIDTH) {
   await p.getByRole('tab', { name: /^Conta atual/ }).click();
   await p.getByRole('button', { name: 'Editar', exact: true }).first().click();
   await scan('formulário da conta'); await close();
+  await p.getByRole('button', { name: 'Conta caiu', exact: true }).click();
+  await scan('conta caiu (passo 1)'); await close();
   await p.getByRole('tab', { name: /^Links/ }).click();
   const edits = p.getByRole('button', { name: /^Editar/ });
   if (await edits.count()) { await edits.first().click(); if (await dialog().count()) { await scan('formulário de link (com Apagar)'); await p.screenshot({ path: OUT + `${WIDTH}-link.png` }); await close(); } }
@@ -128,6 +130,10 @@ async function scanWidth(WIDTH) {
   await p.getByRole('tab', { name: /^Vendas/ }).click();
   await scan('Planilha · Vendas');
   await p.getByRole('tab', { name: /^Contas/ }).click();
+  await p.getByRole('button', { name: 'Mais', exact: true }).click();
+  await dialog().getByRole('link', { name: 'Quedas de contas' }).click();
+  await p.getByRole('heading', { name: 'Quedas', exact: true }).waitFor();
+  await scan('Quedas');
   await more('Infraestrutura');
   await scan('Infraestrutura');
   await p.getByRole('button', { name: /^Editar/ }).first().click();
@@ -183,6 +189,20 @@ async function scanWidth(WIDTH) {
   }
   await scan('conta · senhas compridas à mostra');
   await p.screenshot({ path: OUT + `${WIDTH}-senhas-a-mostra.png`, fullPage: true });
+
+  // "Conta caiu" até o fim: a conta nova (reposição), com a confirmação de reuso, e os avisos da tela Hoje
+  await p.getByRole('button', { name: 'Conta caiu', exact: true }).click();
+  await dialog().getByRole('button', { name: 'Confirmar queda', exact: true }).click();
+  await dialog().getByRole('heading', { name: 'Nova conta' }).waitFor();
+  await dialog().getByLabel('Celular', { exact: true }).selectOption({ index: 1 });
+  await dialog().getByText(/^Reutilizar o celular/).waitFor();
+  await scan('nova conta (reposição, com confirmação de reuso)');
+  await p.screenshot({ path: OUT + `${WIDTH}-reposicao.png` });
+  await close();
+  await p.getByRole('link', { name: /^Hoje/ }).click();
+  await p.getByRole('link', { name: /sem conta em operação/ }).waitFor();
+  await scan('Hoje · com avisos');
+  await p.screenshot({ path: OUT + `${WIDTH}-hoje-avisos.png`, fullPage: true });
   await browser.close();
   resetData();
   return bad.map((line) => `${WIDTH}px · ${line}`);

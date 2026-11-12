@@ -4,7 +4,7 @@ import { useState } from "react";
 import { History, KeyRound, Pencil, Plus, Trash2 } from "lucide-react";
 import { formatDate, formatDateTime, formatDuration } from "@/lib/dates";
 import { formatNumber } from "@/lib/format";
-import { generationLabel, lifetimeDays, phoneLabel, profileShortLabel } from "@/lib/selectors";
+import { accountToReplace, generationLabel, lifetimeDays, phoneLabel, profileShortLabel } from "@/lib/selectors";
 import { deleteRow, useStore } from "@/lib/store";
 import type { Account, Avatar } from "@/lib/types";
 import { AccountStatusBadge, ExampleBadge } from "@/components/ui/badge";
@@ -189,6 +189,8 @@ export function HistoryTab({ avatar, accounts }: HistoryTabProps) {
         <AccountForm
           avatar={avatar}
           account={editing === "new" ? undefined : editing}
+          // conta nova quando a última caiu e não há outra viva: é uma reposição (ganha o checklist)
+          replacing={editing === "new" ? (accountToReplace(accounts) ?? undefined) : undefined}
           onClose={() => setEditing(null)}
         />
       ) : null}
