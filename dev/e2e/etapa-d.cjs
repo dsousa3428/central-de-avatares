@@ -51,7 +51,7 @@ const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   psql("delete from public.weekly_sales; update public.settings set prefs = jsonb_set(prefs, '{examples_version}', '2')");
   await page.reload();
   await page.getByRole("heading", { name: "Hoje", exact: true }).waitFor({ timeout: 30000 });
-  await db("select count(*)::text || '|' || (select prefs->>'examples_version' from public.settings) from public.weekly_sales where is_example", "8|4", "exemplos de uma versão anterior são completados com as vendas");
+  await db("select count(*)::text || '|' || (select prefs->>'examples_version' from public.settings) from public.weekly_sales where is_example", "8|5", "exemplos de uma versão anterior são completados com as vendas");
 
   await openSales();
   await page.getByRole("heading", { name: "Lançar vendas" }).waitFor();

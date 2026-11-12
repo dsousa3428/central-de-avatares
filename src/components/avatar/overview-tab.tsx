@@ -10,6 +10,7 @@ import { AccountStatusBadge, AvatarStatusBadge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Section } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
+import { StructureSection } from "./structure-section";
 
 interface OverviewTabProps {
   avatar: Avatar;
@@ -100,6 +101,8 @@ export function OverviewTab({ avatar, country, account, onEdit, onGoTo, onNewAcc
           </div>
         )}
       </Section>
+
+      <StructureSection avatar={avatar} onEditLinks={() => onGoTo("links")} className="md:col-span-2" />
 
       <Section
         title="Links principais"

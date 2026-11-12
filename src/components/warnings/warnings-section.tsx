@@ -7,6 +7,7 @@ import {
   CalendarOff,
   ChevronRight,
   Flame,
+  Hammer,
   ListChecks,
   TrendingUp,
   TriangleAlert,
@@ -30,6 +31,7 @@ const ICONS: Record<WarningKind, LucideIcon> = {
   sem_calendario: CalendarOff,
   semana_sem_vendas: TrendingUp,
   pronta: CalendarCheck,
+  estrutura_pendente: Hammer,
   reposicao_pendente: ListChecks,
 };
 

@@ -9,8 +9,10 @@
 import { formatDate, formatDayMonth } from "./dates";
 import { checklistProgress, readChecklist } from "./replacement";
 import { addWeeks, weekEnd, weekLabel, weekStart } from "./sales";
+import { pendingLabels, structureProgress } from "./structure";
 import {
   avatarsWithoutLiveAccount,
+  currentAccount,
   generationLabel,
   normalizeProxy,
   phoneLabel,
@@ -33,6 +35,7 @@ export type WarningKind =
   | "sem_calendario" // conta "aquecendo" sem calendário de aquecimento
   | "semana_sem_vendas" // avatares ativos sem lançamento de vendas na semana passada
   | "pronta" // aquecimento concluído: conta pronta para operar
+  | "estrutura_pendente" // o aquecimento terminou e ainda falta site, entregável, checkout ou automação
   | "reposicao_pendente"; // checklist de reposição com itens por fazer
 
 /** danger = risco para as contas · warn = algo ficou para trás · info = lembrete · good = boa notícia */
@@ -214,6 +217,21 @@ export function buildWarnings(db: Db, today: string): Warning[] {
         accountIds: [row.account.id],
       });
     } else if (row.info.phase === "concluido") {
+      // a conta ficou pronta, mas o que ela vai vender ainda não: é a hora de avisar
+      const structure = structureProgress(row.avatar.kit);
+      if (!structure.complete) {
+        warnings.push({
+          id: `estrutura:${row.avatar.id}:${structure.pending.map((step) => step.key).join("+")}`,
+          kind: "estrutura_pendente",
+          level: "warn",
+          title: `${row.avatar.name}: falta terminar a estrutura`,
+          text: `O aquecimento de @${row.account.handle} terminou, mas ainda falta: ${pendingLabels(structure)}.`,
+          href: `/avatar?id=${row.avatar.id}`,
+          action: "Ver estrutura",
+          avatarIds: [row.avatar.id],
+          accountIds: [row.account.id],
+        });
+      }
       warnings.push({
         id: `pronta:${row.warmup.id}`,
         kind: "pronta",
@@ -227,6 +245,29 @@ export function buildWarnings(db: Db, today: string): Warning[] {
       });
     }
   }
+  // --- conta já no ar com a estrutura começada e não terminada
+  // (Avatar sem nenhum passo marcado fica de fora: quem já vendia antes de a estrutura existir
+  // no painel não deve ser cobrado por ela. O id é o mesmo do aviso do fim do aquecimento:
+  // dispensado lá, continua dispensado quando a conta é marcada como ativa.)
+  for (const avatar of db.avatars) {
+    if (avatar.status !== "ativo") continue;
+    const structure = structureProgress(avatar.kit);
+    if (structure.complete || structure.done === 0) continue;
+    const account = currentAccount(db.accounts.filter((item) => item.avatar_id === avatar.id));
+    if (!account || account.status !== "ativa") continue;
+    warnings.push({
+      id: `estrutura:${avatar.id}:${structure.pending.map((step) => step.key).join("+")}`,
+      kind: "estrutura_pendente",
+      level: "warn",
+      title: `${avatar.name}: falta terminar a estrutura`,
+      text: `@${account.handle} já está ativa, mas ainda falta: ${pendingLabels(structure)}.`,
+      href: `/avatar?id=${avatar.id}`,
+      action: "Ver estrutura",
+      avatarIds: [avatar.id],
+      accountIds: [account.id],
+    });
+  }
+
   for (const account of warmingWithoutPlan(db)) {
     const avatar = avatarOf(account);
     if (!avatar) continue;

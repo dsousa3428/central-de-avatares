@@ -224,7 +224,7 @@ function unzipStored(bytes) {
   ok("a senha guardada abre com a mesma senha-mestra (os ids das contas foram mantidos)");
 
   // restaurar num painel vazio (aparelho novo, banco novo)
-  psql("truncate public.activity_log, public.weekly_sales, public.warmups, public.accounts, public.avatars, public.countries, public.phones, public.antidetect_profiles cascade; update public.settings set vault = null, prefs = '{\"examples_version\": 4}'::jsonb");
+  psql("truncate public.activity_log, public.weekly_sales, public.warmups, public.accounts, public.avatars, public.countries, public.phones, public.antidetect_profiles cascade; update public.settings set vault = null, prefs = '{\"examples_version\": 5}'::jsonb");
   await more("Configurações");
   await page.reload();
   await page.getByRole("heading", { name: "Configurações" }).waitFor({ timeout: 30000 });

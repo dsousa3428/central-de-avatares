@@ -1,6 +1,6 @@
 # Central de Avatares
 
-Painel **privado**, de um único usuário, para organizar contas de Instagram de avatares de IA em vários países: países, avatares, contas (gerações), aquecimento com tarefas do dia, cofre de senhas, vendas semanais, reposição de contas que caem (com checklist), avisos automáticos de risco, celulares, perfis do navegador anti-detect, links, kit de reposição e uma visão em planilha de tudo.
+Painel **privado**, de um único usuário, para organizar contas de Instagram de avatares de IA em vários países: países, avatares, contas (gerações), aquecimento com tarefas do dia, a estrutura de vendas de cada avatar (site, entregável, checkout e automação), cofre de senhas, vendas semanais, reposição de contas que caem (com checklist), avisos automáticos de risco, celulares, perfis do navegador anti-detect, links, kit de reposição e uma visão em planilha de tudo.
 
 > O painel é só de organização. Ele **não acessa o Instagram**, não automatiza nada e não faz login em conta nenhuma.
 
@@ -15,6 +15,7 @@ Painel **privado**, de um único usuário, para organizar contas de Instagram de
 | **d** | Vendas semanais, totais, gráfico, ranking, conversão para BRL | ✅ pronta |
 | **e** | Botão "Conta caiu" + assistente de reposição com checklist + avisos automáticos + quedas | ✅ pronta |
 | **f** | App instalável, backup (baixar e restaurar), busca global, trocar a senha de login | ✅ pronta |
+| **+** | Estrutura do avatar: site, entregável, checkout e automação, lembrados nos dias em que a conta descansa | ✅ pronta |
 
 ---
 
@@ -121,8 +122,9 @@ Daqui para frente, toda atualização enviada ao GitHub é publicada sozinha pel
 
 ## Como usar
 
-- **Hoje** — o que fazer no dia: quais contas em aquecimento usar, por quantos minutos, em qual celular e em qual perfil do anti-detect, com o botão **Feito**. Mostra também os dias atrasados, as contas que hoje descansam, os aquecimentos que terminam em breve e as contas prontas para operar.
-  - **Avisos** (no topo da tela Hoje): o painel percebe sozinho o mesmo celular, perfil anti-detect ou proxy em duas contas ao mesmo tempo, ou igual ao de uma conta que caiu; avatar ativo sem conta em operação; conta aquecendo sem calendário; vendas da semana passada sem lançamento; e reposição com checklist pela metade. Cada aviso leva para onde se resolve e some quando o problema acaba. O **X** dispensa um aviso (ele volta se a situação mudar, e os dispensados ficam à mão no fim da lista). O número vermelho ao lado de **Hoje**, no menu, conta os avisos em aberto.
+- **Hoje** — o que fazer no dia: quais contas em aquecimento usar, por quantos minutos, em qual celular e em qual perfil do anti-detect, com o botão **Feito**. Mostra também os dias atrasados, as contas que hoje descansam, a estrutura que falta montar em cada avatar (site, entregável, checkout, automação), os aquecimentos que terminam em breve e as contas prontas para operar.
+  - **Avisos** (no topo da tela Hoje): o painel percebe sozinho o mesmo celular, perfil anti-detect ou proxy em duas contas ao mesmo tempo, ou igual ao de uma conta que caiu; avatar ativo sem conta em operação; conta aquecendo sem calendário; aquecimento que terminou com a estrutura de vendas pela metade; vendas da semana passada sem lançamento; e reposição com checklist pela metade. Cada aviso leva para onde se resolve e some quando o problema acaba. O **X** dispensa um aviso (ele volta se a situação mudar, e os dispensados ficam à mão no fim da lista). O número vermelho ao lado de **Hoje**, no menu, conta os avisos em aberto.
+- **Estrutura do avatar** — na *Visão geral* de cada avatar há o bloco **Estrutura**, com os quatro passos que você monta enquanto a conta aquece: **Site de vendas**, **Entregável**, **Checkout** e **Automação**. Toque num passo para marcar (ou desmarcar) quando ele ficar pronto; embaixo de cada um aparece o link que já está cadastrado na aba *Links*. Enquanto a conta está em aquecimento e falta algum passo, o avatar aparece na tela Hoje, em **Montar a estrutura** — com a marca *conta descansa hoje* nos dias de descanso, que são os bons para adiantar isso. Se o aquecimento terminar com a estrutura pela metade, entra um aviso; se a conta começar a operar com a estrutura começada e não terminada, o aviso continua até você terminar (ou dispensar). A Planilha (aba Avatares) tem a coluna *Estrutura*.
 - **Países** — uma aba por país. No topo ficam as tags de aquecimento (toque numa tag para copiar, ou em *Copiar todas*). Abaixo, os avatares do país, com a barra de progresso do aquecimento e as vendas do mês.
 - **Avatar** — toque em um avatar para abrir a página dele, com as seções: Visão geral · Conta atual · Aquecimento · Links · Vídeos para modelar · Perfis de exemplo · Kit de reposição · Vendas · Histórico · Anotações.
 - **Contas** — cada conta é uma *geração* do avatar.

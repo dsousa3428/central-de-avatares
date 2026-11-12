@@ -21,6 +21,7 @@ import {
   type Usage,
 } from "@/lib/selectors";
 import { updateRow, useStore, type Db } from "@/lib/store";
+import { pendingLabels, structureProgress } from "@/lib/structure";
 import type {
   Account,
   AccountStatus,
@@ -643,6 +644,16 @@ function AvatarsSheet({ db }: { db: Db }) {
           ],
           save: (r, value) => updateRow("avatars", r.avatar.id, { status: value as AvatarStatus }, quick),
         },
+      },
+      {
+        key: "estrutura",
+        header: "Estrutura",
+        // site, entregável, checkout e automação: quantos já estão prontos e o que falta
+        text: (r) => {
+          const progress = structureProgress(r.avatar.kit);
+          return progress.complete ? "Pronta" : `${progress.done} de ${progress.total} (falta ${pendingLabels(progress)})`;
+        },
+        sort: (r) => structureProgress(r.avatar.kit).done,
       },
       {
         key: "nicho",

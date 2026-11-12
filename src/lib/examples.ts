@@ -29,7 +29,7 @@ import { buildDays, DEFAULT_WARMUP_PLAN } from "./warmup";
  *  2 = + calendário de aquecimento da conta de exemplo que está aquecendo
  *  3 = + vendas semanais do avatar de exemplo
  */
-export const EXAMPLES_VERSION = 4;
+export const EXAMPLES_VERSION = 5;
 
 async function insertOne<T>(table: string, values: Record<string, unknown>): Promise<T> {
   const { data, error } = await getSupabase().from(table).insert(values).select().single();
@@ -158,6 +158,7 @@ export async function seedExamples(): Promise<void> {
       bio_link: "https://exemplo.com/fra-salvio",
       highlights,
       proof_links: proofLinks,
+      structure: EXAMPLE_STRUCTURE,
     },
     model_videos: videos,
     reference_profiles: references,
@@ -272,6 +273,9 @@ function exampleWarmup(accountId: string, startDate: string, today: string): Rec
   };
 }
 
+/** A estrutura do avatar de exemplo: site, entregável e checkout prontos; falta a automação. */
+const EXAMPLE_STRUCTURE = { site: true, entregavel: true, checkout: true };
+
 /**
  * O checklist de reposição da conta de exemplo que entrou no lugar da que caiu:
  * quase tudo feito, faltando os destaques e as provas sociais.
@@ -360,6 +364,19 @@ export async function upgradeExamples(db: Db, fromVersion: number): Promise<bool
         .from("accounts")
         .update({ checklist: exampleChecklist() })
         .eq("id", account.id)
+        .eq("is_example", true);
+      if (error) throw toAppError(error);
+      changed = true;
+    }
+  }
+  if (fromVersion < 5) {
+    // estrutura (site, entregável, checkout, automação) nos avatares de exemplo que ainda não têm nenhuma marcação
+    for (const avatar of db.avatars) {
+      if (!avatar.is_example || avatar.kit?.structure) continue;
+      const { error } = await getSupabase()
+        .from("avatars")
+        .update({ kit: { ...(avatar.kit ?? {}), structure: EXAMPLE_STRUCTURE } })
+        .eq("id", avatar.id)
         .eq("is_example", true);
       if (error) throw toAppError(error);
       changed = true;

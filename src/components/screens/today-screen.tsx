@@ -9,6 +9,7 @@ import {
   Coffee,
   Fingerprint,
   Flame,
+  Hammer,
   Search,
   Smartphone,
   Timer,
@@ -25,16 +26,18 @@ import {
   profileLabel,
   profileShortLabel,
   runningWarmups,
+  structuresToBuild,
   type RunningWarmup,
 } from "@/lib/selectors";
 import { useStore } from "@/lib/store";
+import { pendingLabels } from "@/lib/structure";
 import type { Account, AccountStatus, Avatar, Country } from "@/lib/types";
 import { setSearchOpen } from "@/lib/ui-state";
 import { markDay } from "@/lib/warmup-actions";
 import { ExamplesNotice } from "@/components/common/examples-notice";
 import { PageHeader } from "@/components/shell/page-header";
 import { AvatarPhoto } from "@/components/ui/avatar-photo";
-import { AccountStatusBadge } from "@/components/ui/badge";
+import { AccountStatusBadge, Badge } from "@/components/ui/badge";
 import { Button, buttonClass } from "@/components/ui/button";
 import { Card, EmptyState, Section } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
@@ -86,6 +89,8 @@ export function TodayScreen() {
   const ready = warmups.filter((w) => w.info.phase === "concluido");
   const endingSoon = warmups.filter((w) => w.info.phase === "em_andamento" && w.info.daysLeft <= 3);
   const scheduled = warmups.filter((w) => w.info.phase === "agendado");
+  // enquanto a conta aquece, monta-se o que ela vai vender: site, entregável, checkout e automação
+  const building = useMemo(() => structuresToBuild(db, today), [db, today]);
   const warnings = useWarnings();
   const listed = (list: Warning[]) => list.filter((warning) => !OWN_SECTION.includes(warning.kind));
 
@@ -175,6 +180,36 @@ export function TodayScreen() {
             </ul>
           )}
         </section>
+
+        {building.length > 0 ? (
+          <Section title="Montar a estrutura" subtitle="Enquanto as contas aquecem: site, entregável, checkout e automação.">
+            <ul className="divide-y divide-line">
+              {building.map((row) => (
+                <li key={row.avatar.id}>
+                  <Link
+                    href={`/avatar?id=${row.avatar.id}`}
+                    className="flex items-center gap-3 py-2.5 focus-visible:outline-2 focus-visible:outline-ring"
+                  >
+                    <Hammer className="size-5 shrink-0 text-primary" aria-hidden />
+                    <span className="min-w-0 flex-1">
+                      <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span className="font-medium">
+                          {row.country?.flag ? `${row.country.flag} ` : ""}
+                          {row.avatar.name}
+                        </span>
+                        {row.restingToday ? <Badge tone="indigo">conta descansa hoje</Badge> : null}
+                      </span>
+                      <span className="mt-0.5 block text-sm text-muted">
+                        Falta: {pendingLabels(row.progress)} · {row.progress.done} de {row.progress.total} prontos
+                      </span>
+                    </span>
+                    <ChevronRight className="size-4 shrink-0 text-muted" aria-hidden />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </Section>
+        ) : null}
 
         {ready.length > 0 ? (
           <Section title="Prontas para operar" subtitle="Aquecimento concluído.">

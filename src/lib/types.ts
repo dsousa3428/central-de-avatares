@@ -72,6 +72,12 @@ export interface ReplacementKit {
   bio_link?: string;
   highlights?: KitHighlight[];
   proof_links?: LabeledLink[];
+  /**
+   * Estrutura de vendas do avatar (site, entregável, checkout, automação): quais
+   * passos já estão prontos. Fica aqui para não exigir coluna nova no banco — ver
+   * src/lib/structure.ts.
+   */
+  structure?: Partial<Record<string, boolean>>;
 }
 
 export interface Avatar extends BaseRow {

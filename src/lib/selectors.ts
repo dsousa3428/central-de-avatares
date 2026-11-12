@@ -3,6 +3,7 @@
 import { daysBetween, todayISO } from "./dates";
 import type { Db } from "./store";
 import type { Account, AntidetectProfile, Avatar, Country, Phone, Warmup } from "./types";
+import { structureProgress, type StructureProgress } from "./structure";
 import { warmupInfo, type WarmupInfo } from "./warmup";
 
 /** Conta "viva" = qualquer status que não seja caída. */
@@ -181,4 +182,42 @@ export function runningWarmups(db: Db, today = todayISO()): RunningWarmup[] {
 export function warmingWithoutPlan(db: Db): Account[] {
   const running = new Set(db.warmups.filter((w) => !w.finished_at).map((w) => w.account_id));
   return db.accounts.filter((a) => a.status === "aquecendo" && !running.has(a.id));
+}
+
+/** Um avatar cuja conta está aquecendo e que ainda tem estrutura (site, entregável, checkout, automação) por montar. */
+export interface StructureToBuild {
+  avatar: Avatar;
+  country: Country | undefined;
+  account: Account;
+  progress: StructureProgress;
+  /** Hoje a conta descansa no calendário de aquecimento: bom dia para adiantar a estrutura. */
+  restingToday: boolean;
+}
+
+/**
+ * A estrutura é montada enquanto a conta aquece: lista os avatares ativos cuja
+ * conta atual está "aquecendo" e que ainda têm passos por fazer. Quem descansa
+ * hoje vem primeiro.
+ */
+export function structuresToBuild(db: Db, today = todayISO()): StructureToBuild[] {
+  const list: StructureToBuild[] = [];
+  for (const avatar of db.avatars) {
+    if (avatar.status !== "ativo") continue;
+    const account = currentAccount(db.accounts.filter((item) => item.avatar_id === avatar.id));
+    if (!account || account.status !== "aquecendo") continue;
+    const progress = structureProgress(avatar.kit);
+    if (progress.complete) continue;
+    const warmup = warmupOf(db, account.id);
+    const info = warmup && isWarmupRunning(account, warmup) ? warmupInfo(warmup, today) : null;
+    list.push({
+      avatar,
+      country: db.countries.find((country) => country.id === avatar.country_id),
+      account,
+      progress,
+      restingToday: Boolean(info && info.phase !== "concluido" && info.today && !info.today.use),
+    });
+  }
+  return list.sort(
+    (a, b) => Number(b.restingToday) - Number(a.restingToday) || a.avatar.name.localeCompare(b.avatar.name, "pt-BR"),
+  );
 }

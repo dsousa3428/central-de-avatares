@@ -9,6 +9,7 @@ import { checklistProgress, readChecklist } from "./replacement";
 import { cleanRates, inBRL } from "./sales";
 import { generationLabel, phoneLabel, profileLabel } from "./selectors";
 import type { Db } from "./store";
+import { pendingLabels, structureProgress } from "./structure";
 import type { AccountStatus } from "./types";
 
 export interface Sheet {
@@ -66,6 +67,7 @@ export function buildSheets(db: Db): Sheet[] {
       "País",
       "Nicho",
       "Situação",
+      "Estrutura",
       "Produto",
       "Preço",
       "Moeda",
@@ -86,11 +88,13 @@ export function buildSheets(db: Db): Sheet[] {
   ];
   for (const avatar of db.avatars) {
     const kit = avatar.kit ?? {};
+    const structure = structureProgress(kit);
     avatars.push([
       avatar.name,
       text(countryOf(avatar.country_id)?.name),
       text(avatar.niche),
       avatar.status === "ativo" ? "Ativo" : "Pausado",
+      structure.complete ? "Pronta" : `${structure.done} de ${structure.total} (falta ${pendingLabels(structure)})`,
       text(avatar.product_name),
       number(avatar.product_price, 2),
       text(avatar.product_currency),

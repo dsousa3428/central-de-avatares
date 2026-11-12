@@ -53,7 +53,7 @@ const brDate = (iso) => iso.split("-").reverse().join("/");
   psql("update public.accounts set checklist = null; update public.settings set prefs = jsonb_set(prefs, '{examples_version}', '3')");
   await page.reload();
   await page.getByRole("heading", { name: "Hoje", exact: true }).waitFor({ timeout: 30000 });
-  await db(account(2, "jsonb_array_length(a.checklist)") + " and (select prefs->>'examples_version' from public.settings) = '4'", "9", "exemplos de uma versão anterior são completados com o checklist");
+  await db(account(2, "jsonb_array_length(a.checklist)") + " and (select prefs->>'examples_version' from public.settings) = '5'", "9", "exemplos de uma versão anterior são completados com o checklist");
 
   // ---------------------------------------------------------------
   section("Tela Hoje: lista de avisos");

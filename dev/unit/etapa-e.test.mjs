@@ -164,15 +164,17 @@ test("aquecimento: atrasado, concluído e sem calendário", () => {
     sales: ["a1", "a2", "a3", "a4"].map((id) => sale(id, "2026-11-02")),
   });
   const list = buildWarnings(db, TODAY);
-  assert.deepEqual(kinds(list), ["aquecimento_atrasado", "sem_calendario", "pronta"]); // pendências primeiro, boa notícia por último
+  // pendências primeiro, boa notícia por último (o "Pronto" terminou de aquecer sem a estrutura montada: avisa também)
+  assert.deepEqual(kinds(list), ["aquecimento_atrasado", "estrutura_pendente", "sem_calendario", "pronta"]);
   const late = list[0];
   assert.equal(late.level, "warn");
   assert.equal(late.title, "Atrasado · @c1: aquecimento atrasado");
   assert.match(late.text, /^2 dias de uso passaram sem ser marcados \(desde 07\/11\)\.$/);
   assert.equal(late.href, "/avatar?id=a1&aba=aquecimento");
-  assert.equal(list[1].title, "Sem plano · @c3: aquecendo sem calendário");
-  assert.equal(list[2].level, "good");
-  assert.equal(list[2].title, "Pronto · @c2: aquecimento concluído");
+  assert.equal(list[1].title, "Pronto: falta terminar a estrutura");
+  assert.equal(list[2].title, "Sem plano · @c3: aquecendo sem calendário");
+  assert.equal(list[3].level, "good");
+  assert.equal(list[3].title, "Pronto · @c2: aquecimento concluído");
 });
 
 test("semana passada sem lançamento de vendas", () => {

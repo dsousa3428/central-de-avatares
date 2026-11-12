@@ -14,12 +14,13 @@ Nada desta pasta vai para a Vercel. Ela existe para testar o painel de verdade (
 | `e2e/etapa-d.cjs` | Etapa (d): vendas — lançamento rápido por semana (inclusive digitando rápido, com as gravações atrasadas de propósito), detalhes, cotações e conversão para reais (cotação guardada em cada venda, recalcular vendas antigas), gráfico (toque e arrastar) e tabela, ranking, aba Vendas do avatar, vendas do mês em Países, tabela de vendas na Planilha, dois aparelhos, exemplos. |
 | `e2e/etapa-e.cjs` | Etapa (e): avisos automáticos na tela Hoje (reuso de celular/perfil/proxy, avatar sem conta, vendas sem lançamento, reposição pela metade; dispensar e trazer de volta; número no menu), "Conta caiu" em dois passos com a confirmação de reuso, checklist de reposição com o kit, deixar a conta nova para depois, e a tela de quedas. |
 | `e2e/etapa-f.cjs` | Etapa (f): busca global, backup (baixar o .json e o .zip de planilhas; restaurar — arquivo errado, banco desatualizado, confirmação, backup de segurança, ids mantidos, senhas do cofre abrindo depois), troca da senha de login e aplicativo instalável (manifesto, ícones, service worker e página "Sem internet"). É o único teste com o service worker ligado. |
+| `e2e/etapa-g.cjs` | Estrutura do avatar: marcar e desmarcar site, entregável, checkout e automação, a seção "Montar a estrutura" da tela Hoje (com a marca de descanso), o aviso quando o aquecimento termina com a estrutura pela metade e a coluna da Planilha. |
 | `e2e/planilha.cjs` | Planilha: grade, edição nas células, ordenar, filtrar, buscar, copiar e baixar. |
 | `e2e/extras.cjs` | Situações de exceção: banco sem tabelas, queda de internet ao salvar e regras dos dados de exemplo. |
 | `e2e/robustez.cjs` | Dois aparelhos ao mesmo tempo, toques rápidos, falhas no meio de um salvamento, validações de digitação, sair em outra aba. |
 | `e2e/textos-longos.cjs` | Layout: com nomes, links e anotações enormes, nenhuma tela pode rolar para o lado num celular de 360 px. |
 | `e2e/botoes.cjs` | Layout: em 320, 360 e 390 px, nenhum botão (das telas e das janelas) pode ficar com o texto quebrado, cortado ou fora da tela. |
-| `unit/*.test.mjs` | Testes rápidos das regras puras: números, links, @ e datas; calendário de aquecimento; exportação; criptografia do cofre; vendas (semanas, somas, cotações); avisos, checklist de reposição e quedas; busca, backup e o .zip das planilhas. |
+| `unit/*.test.mjs` | Testes rápidos das regras puras: números, links, @ e datas; calendário de aquecimento; exportação; criptografia do cofre; vendas (semanas, somas, cotações); avisos, checklist de reposição e quedas; busca, backup e o .zip das planilhas; estrutura do avatar. |
 
 As chaves do ambiente local são geradas na hora e ficam em `supabase-local/.env` (ignorado pelo git).
 
@@ -63,6 +64,10 @@ node dev/e2e/etapa-e.cjs
 
 ```bash
 node dev/e2e/etapa-f.cjs
+```
+
+```bash
+node dev/e2e/etapa-g.cjs
 ```
 
 ```bash
