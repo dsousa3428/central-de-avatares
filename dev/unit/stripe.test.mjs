@@ -21,6 +21,7 @@ import {
   matchLinks,
   settle,
   startOfDay,
+  stillAsPreviewed,
   weekOfTimestamp,
   weeklyFromStripe,
 } from "../../src/lib/stripe-sync.ts";
@@ -143,6 +144,36 @@ test("o que muda no painel: novo, diferente, igual — e o zero da semana passad
   assert.deepEqual(plan.rows[3].next, { currency: "EUR", amount: 0, count: 0 });
   // sem a lista de zeros, semana sem venda não gera nada
   assert.equal(buildPlan({ weeks: [], sales, rates: {} }).rows.length, 0);
+  assert.deepEqual(plan.incomplete, []);
+});
+
+test("o que muda no painel: vendas de fora por falta de cotação continuam avisadas depois de lançar o resto", () => {
+  const weeks = [{ avatarId: "a1", week: "2026-11-09", parts: [{ currency: "EUR", amount: 27, count: 1 }, { currency: "USD", amount: 40, count: 2 }] }];
+  const sales = [{ avatar_id: "a1", week_start: "2026-11-09", amount: 40, currency: "USD", sales_count: 2 }]; // a parte em dólar já foi lançada
+  const plan = buildPlan({ weeks, sales, rates: {} });
+  // nada a gravar — mas "tudo em dia" esconderia os € 27 que nunca entraram
+  assert.equal(plan.rows.length, 0);
+  assert.equal(plan.same, 1);
+  assert.deepEqual(plan.incomplete, [
+    { key: "a1:2026-11-09", avatarId: "a1", week: "2026-11-09", recorded: { currency: "USD", amount: 40, count: 2 }, left: [{ currency: "EUR", amount: 27, count: 1 }] },
+  ]);
+  // com as cotações digitadas, o lançamento é corrigido e não sobra nada de fora
+  const fixed = buildPlan({ weeks, sales, rates: { EUR: 6, USD: 5 } });
+  assert.deepEqual(fixed.rows.map((row) => [row.kind, row.next, row.converted]), [["change", { currency: "USD", amount: 72.4, count: 3 }, true]]);
+  assert.deepEqual(fixed.incomplete, []);
+});
+
+test("antes de gravar: o lançamento ainda é o que a conferência mostrou?", () => {
+  const sale = { amount: "81.00", currency: "eur", sales_count: 3 };
+  const previewed = { amount: 81, currency: "EUR", count: 3 };
+  assert.equal(stillAsPreviewed(sale, previewed), true);
+  assert.equal(stillAsPreviewed(undefined, null), true); // não havia lançamento e continua não havendo
+  assert.equal(stillAsPreviewed(sale, null), false); // a conferência dizia "novo", mas alguém lançou nesse meio-tempo
+  assert.equal(stillAsPreviewed(undefined, previewed), false); // o lançamento foi apagado
+  assert.equal(stillAsPreviewed({ ...sale, amount: 90 }, previewed), false);
+  assert.equal(stillAsPreviewed({ ...sale, currency: "USD" }, previewed), false);
+  assert.equal(stillAsPreviewed({ ...sale, sales_count: null }, previewed), false);
+  assert.equal(stillAsPreviewed({ ...sale, sales_count: null }, { ...previewed, count: null }), true);
 });
 
 // ---------------------------------------------------------------------------
@@ -170,6 +201,8 @@ test("endereço da Stripe: só pode ser trocado por um endereço do próprio com
   for (const evil of ["https://exemplo.com", "http://exemplo.com", "http://127.0.0.1.exemplo.com", "https://127.0.0.1", "nada"]) {
     assert.equal(stripeApiBase({ STRIPE_API_BASE: evil }), "https://api.stripe.com");
   }
+  // na Vercel não há "o próprio computador": é sempre a Stripe de verdade
+  assert.equal(stripeApiBase({ STRIPE_API_BASE: "http://127.0.0.1:54390", VERCEL: "1" }), "https://api.stripe.com");
 });
 
 test("mensagens: nada com cara de chave passa adiante", () => {
@@ -217,6 +250,19 @@ test("quem pede: só alguém logado no painel, e só com o cadastro público des
   assert.equal(await checkCaller(async () => { throw new Error("sem rede"); }, SUPABASE, `Bearer ${TOKEN}`), "supabase");
   assert.equal(await checkCaller(supabaseFetch(), { url: "", key: "x" }, `Bearer ${TOKEN}`), "supabase");
   assert.equal(await checkCaller(supabaseFetch(), { url: SUPABASE.url, key: "" }, `Bearer ${TOKEN}`), "supabase");
+});
+
+test("quem pede: com STRIPE_OWNER_EMAIL, só o e-mail do dono passa", async () => {
+  const as = (owner, user = reply(200, { id: "u1", email: "dono@exemplo.com" })) => checkCaller(supabaseFetch({ user }), SUPABASE, `Bearer ${TOKEN}`, owner);
+  assert.equal(await as("dono@exemplo.com"), null);
+  assert.equal(await as("  DONO@Exemplo.com "), null); // maiúsculas e espaços não atrapalham
+  assert.equal(await as(""), null); // sem a variável, vale qualquer usuário do projeto (que deve ser um só)
+  assert.equal(await as(undefined), null);
+  // outro usuário do mesmo projeto do Supabase: está logado, mas não é o dono
+  assert.equal(await as("dono@exemplo.com", reply(200, { id: "u2", email: "ajudante@exemplo.com" })), "forbidden");
+  assert.equal(await as("dono@exemplo.com", reply(200, { id: "u2" })), "forbidden");
+  // e continua valendo a exigência do cadastro desligado
+  assert.equal(await checkCaller(supabaseFetch({ settings: reply(200, { disable_signup: false }) }), SUPABASE, `Bearer ${TOKEN}`, "dono@exemplo.com"), "signup_open");
 });
 
 const KEY = "rk_test_chave_dos_testes";
@@ -392,7 +438,15 @@ test("rota dos links: sem login nada acontece; com login, a lista — e a chave 
   // tudo certo
   const fine = routeDeps({ stripe: () => reply(200, { data: [{ id: "plink_1", url: "https://buy.stripe.com/a", active: true }], has_more: false }) });
   const result = await read(await handleLinks(post({}), fine.deps));
-  assert.deepEqual(result, { status: 200, body: { ok: true, links: [{ id: "plink_1", url: "https://buy.stripe.com/a", active: true }], next: null, live: false }, cache: "no-store" });
+  assert.deepEqual(result, { status: 200, body: { ok: true, links: [{ id: "plink_1", url: "https://buy.stripe.com/a", active: true }], next: null, live: false, restricted: true }, cache: "no-store" });
+  // a chave secreta completa também funciona, mas a resposta avisa (a janela recomenda trocar pela restrita)
+  const full = (await read(await handleLinks(post({}), routeDeps({ env: { STRIPE_SECRET_KEY: "sk_live_chavecompleta" } }).deps))).body;
+  assert.deepEqual([full.ok, full.live, full.restricted], [true, true, false]);
+  // com STRIPE_OWNER_EMAIL, outro usuário do projeto recebe 403 e a Stripe nem é chamada
+  const other = routeDeps({ env: { STRIPE_SECRET_KEY: KEY, STRIPE_OWNER_EMAIL: "outra@pessoa.com" } });
+  assert.deepEqual(await read(await handleLinks(post({}), other.deps)), { status: 403, body: { ok: false, error: "forbidden" }, cache: "no-store" });
+  assert.equal(other.calls.length, 0);
+  assert.equal((await read(await handleLinks(post({}), routeDeps({ env: { STRIPE_SECRET_KEY: KEY, STRIPE_OWNER_EMAIL: "Dono@Exemplo.com" } }).deps))).body.ok, true);
   assert.deepEqual(fine.calls, [{ url: "https://api.stripe.com/v1/payment_links?limit=100", authorization: `Bearer ${KEY}` }]);
   assert.equal(JSON.stringify(result).includes(KEY), false);
   // corpo vazio também vale; continuação inválida, não

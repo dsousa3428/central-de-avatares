@@ -266,6 +266,26 @@ async function route(base, path, { token, body = {}, method = "POST" } = {}) {
   await close();
 
   // ---------------------------------------------------------------
+  section("O lançamento mudou depois da conferência: o painel não grava por cima");
+  await openStripe();
+  await dialog().getByLabel("Buscar as vendas de").selectOption("12");
+  await search();
+  await dialog().getByText("1 lançamento para atualizar.").waitFor();
+  // com a lista na tela, o valor dessa semana é corrigido em outro aparelho — e, ao voltar para o painel
+  // (15 s depois), este aparelho fica sabendo
+  psql(`update public.weekly_sales set amount = 140, updated_at = now() where week_start = ${monday(6)}`);
+  await page.waitForTimeout(15500);
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await page.waitForTimeout(1500);
+  await dialog().getByRole("button", { name: "Lançar 1" }).click();
+  await dialog().getByText("1 lançamento não foi gravado:").waitFor();
+  await dialog().getByText(/mudou depois da conferência\. Toque em Stripe de novo para conferir\./).waitFor();
+  ok("a janela diz que o lançamento mudou e pede para conferir de novo");
+  assert(psql(saleOf("Fra' Salvio", 6)) === "140.00|EUR|5|true", "o valor corrigido no outro aparelho continua lá");
+  await fits("resultado com falha");
+  await close();
+
+  // ---------------------------------------------------------------
   section("Semana passada sem venda: a Stripe diz zero");
   const uid = psql("select user_id from public.countries limit 1");
   const italy = psql("select id from public.countries where name = 'Itália'");
@@ -296,6 +316,16 @@ async function route(base, path, { token, body = {}, method = "POST" } = {}) {
   assert(/Novo: US\$ 40,00 · 2 vendas/.test(mixed) && /Ficou de fora: € 27,00 · 1 venda\./.test(mixed), "sem cotação, fica a moeda com mais vendas e a tela diz o que ficou de fora");
   assert(/digite a cotação de USD e EUR em Vendas → Cotações/.test(mixed), "e ensina a resolver");
   await fits("moedas misturadas");
+  await dialog().getByRole("button", { name: "Lançar 1" }).click();
+  await toast("1 lançamento atualizado pela Stripe");
+  await db(saleOf("Suor Lucia", 0), "40.00|USD|2|false", "a parte em dólar é lançada");
+  // buscar de novo: não há o que gravar, mas o painel não pode dizer "tudo em dia"
+  await openStripe();
+  await search();
+  await dialog().getByText("Nenhum lançamento para atualizar.").waitFor();
+  await dialog().getByText("Vendas que continuam de fora, por falta de cotação:").waitFor();
+  assert(/Suor Lucia, semana de .*: € 27,00 · 1 venda/.test(await textOf(dialog())) && !(await textOf(dialog())).includes("Tudo em dia"), "os € 27 que não entraram continuam avisados a cada busca");
+  await fits("vendas de fora");
   await close();
   psql(`update public.settings set brl_rates = '{"EUR": 6, "USD": 5}'::jsonb`);
   await reload();
@@ -303,10 +333,10 @@ async function route(base, path, { token, body = {}, method = "POST" } = {}) {
   await search();
   await dialog().getByText("1 lançamento para atualizar.").waitFor();
   const converted = await textOf(row("🇮🇹 Suor Lucia"));
-  assert(/Novo: US\$ 72,40 · 3 vendas/.test(converted) && /somadas pelas cotações do painel/.test(converted), "com as cotações, as duas moedas viram um lançamento só (40 + 27 × 6 ÷ 5 = US$ 72,40)");
+  assert(/No painel: US\$ 40,00 · 2 vendas → US\$ 72,40 · 3 vendas/.test(converted) && /somadas pelas cotações do painel/.test(converted), "com as cotações, as duas moedas viram um lançamento só (40 + 27 × 6 ÷ 5 = US$ 72,40)");
   await dialog().getByRole("button", { name: "Lançar 1" }).click();
   await toast("1 lançamento atualizado pela Stripe");
-  await db(saleOf("Suor Lucia", 0, "s.amount || '|' || s.currency || '|' || s.sales_count || '|' || s.brl_rate::float"), "72.40|USD|3|5", "gravado em dólares, com a cotação do dia guardada");
+  await db(saleOf("Suor Lucia", 0, "s.amount || '|' || s.currency || '|' || s.sales_count || '|' || s.brl_rate::float"), "72.40|USD|3|5", "gravado em dólares, com a cotação usada na soma guardada no lançamento");
 
   // ---------------------------------------------------------------
   section("O mesmo link em dois avatares");
@@ -397,6 +427,13 @@ async function route(base, path, { token, body = {}, method = "POST" } = {}) {
   await close();
   await page.unroute("**/api/stripe/links");
 
+  await page.route("**/api/stripe/links", answer({ ok: true, live: true, restricted: false, next: null, links: [] }));
+  await openStripe();
+  await dialog().getByText(/é a chave secreta completa \(começa com sk_\)/).waitFor();
+  ok("chave secreta completa em vez da restrita: funciona, mas a janela recomenda trocar");
+  await close();
+  await page.unroute("**/api/stripe/links");
+
   // também em Configurações
   await more("Configurações");
   await page.getByRole("heading", { name: "Vendas pela Stripe" }).waitFor();
@@ -409,10 +446,19 @@ async function route(base, path, { token, body = {}, method = "POST" } = {}) {
   // ---------------------------------------------------------------
   section("Um servidor sem a chave (ou com a chave errada) explica o que falta");
   if (BASE.includes(":3000") && existsSync(join(root, ".next", "BUILD_ID"))) {
-    for (const [value, problem] of [["", "missing"], ["pk_live_chavepublicavel", "publishable"], ["qualquer coisa", "format"]]) {
+    const cases = [
+      [{ STRIPE_SECRET_KEY: "" }, "sem a chave", (r) => r.status === 200 && r.json?.error === "not_configured" && r.json.problem === "missing"],
+      [{ STRIPE_SECRET_KEY: "pk_live_chavepublicavel" }, "com a chave publicável no lugar", (r) => r.status === 200 && r.json?.problem === "publishable"],
+      [{ STRIPE_SECRET_KEY: "qualquer coisa" }, "com um valor que não é chave", (r) => r.status === 200 && r.json?.problem === "format"],
+      // a Stripe reservada a um e-mail: outro usuário do projeto (aqui, o de teste) não passa…
+      [{ STRIPE_OWNER_EMAIL: "outra@pessoa.com" }, "reservado a outro e-mail (STRIPE_OWNER_EMAIL)", (r) => r.status === 403 && r.json?.error === "forbidden"],
+      // …e o dono passa (maiúsculas e espaços não atrapalham)
+      [{ STRIPE_OWNER_EMAIL: ` ${USER.email.toUpperCase()} ` }, "reservado ao e-mail de quem está logado", (r) => r.status === 200 && r.json?.ok === true && r.json.restricted === true],
+    ];
+    for (const [extra, label, expected] of cases) {
       const server = spawn(process.execPath, [join(root, "node_modules", "next", "dist", "bin", "next"), "start", "-p", "3055"], {
         cwd: root,
-        env: { ...process.env, STRIPE_SECRET_KEY: value },
+        env: { ...process.env, ...extra },
         stdio: "ignore",
       });
       try {
@@ -421,12 +467,9 @@ async function route(base, path, { token, body = {}, method = "POST" } = {}) {
           await new Promise((resolve) => setTimeout(resolve, 250));
           up = await fetch("http://localhost:3055/login").then((response) => response.ok, () => false);
         }
-        assert(up, `(servidor de teste no ar com STRIPE_SECRET_KEY="${value}")`);
+        assert(up, `(servidor de teste no ar, ${label})`);
         const answered = await route("http://localhost:3055", "/api/stripe/links", { token });
-        assert(
-          answered.status === 200 && answered.json?.error === "not_configured" && answered.json.problem === problem,
-          `com a variável ${value ? `valendo “${value}”` : "vazia"}, a rota responde “${problem}”`,
-        );
+        assert(expected(answered), `servidor ${label}: a rota responde ${answered.status} ${answered.text.slice(0, 80)}`);
         assert((await route("http://localhost:3055", "/api/stripe/links")).status === 401, "(e, sem login, só o 401)");
       } finally {
         server.kill();

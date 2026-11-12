@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { CircleCheck, FlaskConical, TriangleAlert } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { CircleCheck, FlaskConical, KeyRound, TriangleAlert } from "lucide-react";
 import { todayISO } from "@/lib/dates";
 import { errorMessage } from "@/lib/errors";
 import { formatMoney, plural, prettyUrl } from "@/lib/format";
@@ -75,6 +75,15 @@ export function StripeDialog({ onClose }: { onClose: () => void }) {
   const [weeks, setWeeks] = useState("4");
   // as linhas que o dono desmarcou na conferência (as outras são gravadas)
   const [skipped, setSkipped] = useState<ReadonlySet<string>>(new Set());
+  // janela fechada no meio de uma busca: os pedidos que ainda faltavam não são feitos
+  const cancel = useRef({ cancelled: false });
+  useEffect(() => {
+    const flag = cancel.current;
+    flag.cancelled = false;
+    return () => {
+      flag.cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -116,8 +125,11 @@ export function StripeDialog({ onClose }: { onClose: () => void }) {
     setStep({ name: "fetching", done: 0, total: linkIds.length });
     try {
       const [sales] = await Promise.all([
-        fetchStripeSales(linkIds, addWeeks(thisWeek, 1 - count), (done, total) =>
-          setStep((now) => (now.name === "fetching" ? { name: "fetching", done, total } : now)),
+        fetchStripeSales(
+          linkIds,
+          addWeeks(thisWeek, 1 - count),
+          (done, total) => setStep((now) => (now.name === "fetching" ? { name: "fetching", done, total } : now)),
+          cancel.current,
         ),
         // os lançamentos do painel também são lidos de novo: a comparação é com o que está no banco agora
         refresh().catch(() => undefined),
@@ -260,6 +272,14 @@ export function StripeDialog({ onClose }: { onClose: () => void }) {
             <Callout tone="warn" icon={<FlaskConical />}>
               A chave guardada na Vercel é de <strong>teste</strong>: os números abaixo são vendas de teste da Stripe,
               não de clientes de verdade.
+            </Callout>
+          ) : null}
+
+          {!account.restricted ? (
+            <Callout tone="warn" icon={<KeyRound />}>
+              A chave guardada na Vercel é a chave secreta <strong>completa</strong> (começa com sk_). Funciona, mas ela
+              dá acesso total à sua conta Stripe. O recomendado é trocá-la por uma <strong>chave restrita</strong>{" "}
+              (rk_), só com leitura de Checkout Sessions e Payment Links.
             </Callout>
           ) : null}
 
@@ -406,7 +426,33 @@ function Preview({
   nameOf: (avatarId: string) => string;
 }) {
   const today = todayISO();
+  // vendas em outra moeda que continuam de fora por falta de cotação (em semanas onde não há mais nada a gravar)
+  const leftOut =
+    plan.incomplete.length > 0 ? (
+      <Callout tone="warn" icon={<TriangleAlert />}>
+        <p className="font-medium">Vendas que continuam de fora, por falta de cotação:</p>
+        <ul className="mt-1 list-disc space-y-1 pl-5">
+          {plan.incomplete.map((item) => (
+            <li key={item.key}>
+              {nameOf(item.avatarId)}, semana de {weekLabel(item.week, today)}: {item.left.map(money).join(" e ")}
+            </li>
+          ))}
+        </ul>
+        <p className="mt-2">
+          O painel guarda uma moeda por semana. Digite as cotações em Vendas → Cotações e atualize de novo para somar
+          tudo.
+        </p>
+      </Callout>
+    ) : null;
   if (plan.rows.length === 0) {
+    if (leftOut) {
+      return (
+        <div className="space-y-3">
+          <p className="text-[15px]">Nenhum lançamento para atualizar.</p>
+          {leftOut}
+        </div>
+      );
+    }
     return (
       <Callout tone="info" icon={<CircleCheck />}>
         <p className="font-medium">Tudo em dia.</p>
@@ -461,6 +507,7 @@ function Preview({
           {plural(plan.same, "outro lançamento já estava igual", "outros lançamentos já estavam iguais")} ao da Stripe.
         </p>
       ) : null}
+      {leftOut}
     </div>
   );
 }
@@ -547,6 +594,14 @@ function Problem({ problem }: { problem: StripeProblem }) {
   } else if (problem.kind === "supabase") {
     title = "Não consegui conferir o seu login";
     text = "O Supabase não respondeu agora. Tente de novo em instantes.";
+  } else if (problem.kind === "forbidden") {
+    title = "Este login não pode usar a Stripe do painel";
+    text = (
+      <>
+        A ligação com a Stripe está reservada a outro e-mail (variável <strong>STRIPE_OWNER_EMAIL</strong>, na Vercel).
+        Entre com o e-mail do dono do painel, ou corrija a variável e faça um Redeploy.
+      </>
+    );
   } else if (problem.kind === "auth") {
     title = "Sua sessão expirou";
     text = "Saia e entre de novo no painel, e então volte aqui.";

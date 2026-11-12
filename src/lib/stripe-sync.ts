@@ -240,6 +240,12 @@ export interface Plan {
   rows: PlanRow[];
   /** Quantos lançamentos do painel já estavam iguais aos da Stripe. */
   same: number;
+  /**
+   * Lançamentos que já estão iguais ao que deu para lançar, mas com vendas em outra
+   * moeda ainda de fora por falta de cotação: não há o que gravar, mas a tela precisa
+   * continuar avisando (senão "tudo em dia" esconderia dinheiro que nunca entrou).
+   */
+  incomplete: Array<{ key: string; avatarId: string; week: string; recorded: MoneyPart; left: MoneyPart[] }>;
 }
 
 export interface ZeroCandidate {
@@ -264,6 +270,7 @@ export function buildPlan(input: {
 }): Plan {
   const existing = new Map(input.sales.map((sale) => [`${sale.avatar_id}:${sale.week_start}`, sale]));
   const rows: PlanRow[] = [];
+  const incomplete: Plan["incomplete"] = [];
   const seen = new Set<string>();
   let same = 0;
 
@@ -280,6 +287,7 @@ export function buildPlan(input: {
     const current = { amount: Number(sale.amount), currency: sale.currency.toUpperCase(), count: sale.sales_count ?? null };
     if (current.currency === next.currency && Math.abs(current.amount - next.amount) < 0.005 && current.count === next.count) {
       same += 1;
+      if (left.length > 0) incomplete.push({ key, avatarId: week.avatarId, week: week.week, recorded: next, left });
       continue;
     }
     rows.push({ key, avatarId: week.avatarId, week: week.week, kind: "change", current, next, converted, left });
@@ -302,5 +310,22 @@ export function buildPlan(input: {
   }
 
   rows.sort((a, b) => b.week.localeCompare(a.week) || a.avatarId.localeCompare(b.avatarId));
-  return { rows, same };
+  incomplete.sort((a, b) => b.week.localeCompare(a.week) || a.avatarId.localeCompare(b.avatarId));
+  return { rows, same, incomplete };
+}
+
+/**
+ * O lançamento do painel ainda é o que a conferência mostrou? (Entre conferir e
+ * gravar, o dono pode ter digitado essa semana em outra aba ou aparelho.)
+ */
+export function stillAsPreviewed(
+  sale: Pick<WeeklySale, "amount" | "currency" | "sales_count"> | null | undefined,
+  previewed: PlanRow["current"],
+): boolean {
+  if (!sale || !previewed) return !sale && !previewed;
+  return (
+    sale.currency.toUpperCase() === previewed.currency &&
+    Math.abs(Number(sale.amount) - previewed.amount) < 0.005 &&
+    (sale.sales_count ?? null) === previewed.count
+  );
 }

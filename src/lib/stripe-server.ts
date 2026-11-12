@@ -10,7 +10,8 @@
 //  - só responde a quem está logado no painel (confere o login no Supabase), e só
 //    se o cadastro público do Supabase estiver desligado: a chave é uma só para o
 //    painel inteiro, então "qualquer um que consiga criar uma conta" não pode
-//    chegar até ela;
+//    chegar até ela. Se o projeto do Supabase tiver mais de um usuário, a variável
+//    STRIPE_OWNER_EMAIL reserva as rotas para um e-mail só;
 //  - só LÊ, e só duas listas (links de pagamento e sessões de checkout);
 //  - devolve o mínimo: o endereço de cada link e, de cada venda, a hora, o valor
 //    e a moeda. Nada de nome, e-mail ou cartão de cliente;
@@ -66,7 +67,8 @@ export function isLiveKey(key: string): boolean {
  */
 export function stripeApiBase(env: Env): string {
   const custom = (env.STRIPE_API_BASE ?? "").trim();
-  if (!custom) return STRIPE_API;
+  // (na Vercel não existe "o próprio computador": lá é sempre a Stripe de verdade)
+  if (!custom || env.VERCEL) return STRIPE_API;
   try {
     const url = new URL(custom);
     if (url.protocol === "http:" && (url.hostname === "127.0.0.1" || url.hostname === "localhost")) return url.origin;
@@ -85,8 +87,8 @@ export interface SupabaseConfig {
   key: string | null | undefined;
 }
 
-/** auth = sem login válido · signup_open = cadastro público ligado no Supabase · supabase = não deu para conferir */
-export type CallerProblem = "auth" | "signup_open" | "supabase";
+/** auth = sem login válido · forbidden = logado, mas não é o dono · signup_open = cadastro público ligado no Supabase · supabase = não deu para conferir */
+export type CallerProblem = "auth" | "forbidden" | "signup_open" | "supabase";
 
 function originOf(value: string | null | undefined): string | null {
   try {
@@ -108,13 +110,15 @@ async function readJson(response: Response): Promise<Record<string, unknown> | n
 
 /**
  * Confere, no Supabase, se o pedido vem de alguém logado no painel — e se o
- * painel é mesmo de uma pessoa só (cadastro público desligado). Devolve null
- * quando está tudo certo.
+ * painel é mesmo de uma pessoa só (cadastro público desligado). Com `ownerEmail`
+ * (a variável STRIPE_OWNER_EMAIL), só esse e-mail passa: é para o caso de o
+ * projeto do Supabase ter mais de um usuário. Devolve null quando está tudo certo.
  */
 export async function checkCaller(
   fetchImpl: Fetch,
   supabase: SupabaseConfig,
   authorization: string | null,
+  ownerEmail?: string | null,
 ): Promise<CallerProblem | null> {
   const token = /^Bearer ([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/.exec(authorization ?? "")?.[1];
   if (!token) return "auth";
@@ -144,6 +148,8 @@ export async function checkCaller(
   if (!user.ok || !settings.ok) return "supabase";
   const who = await readJson(user);
   if (!who || typeof who.id !== "string" || !who.id || who.is_anonymous === true) return "auth";
+  const owner = (ownerEmail ?? "").trim().toLowerCase();
+  if (owner && (typeof who.email !== "string" || who.email.trim().toLowerCase() !== owner)) return "forbidden";
   const config = await readJson(settings);
   if (!config) return "supabase";
   return config.disable_signup === true ? null : "signup_open";
@@ -361,8 +367,8 @@ function json(status: number, body: Record<string, unknown>): Response {
 }
 
 // Situações previstas (Stripe ainda não ligada, chave recusada…) respondem 200 com `ok: false` e o
-// motivo: são estados que a tela sabe explicar, não falhas. Só "sem login" (401) e "pedido malfeito"
-// (400) usam o código de erro do HTTP.
+// motivo: são estados que a tela sabe explicar, não falhas. Só "sem login" (401), "não é o dono" (403)
+// e "pedido malfeito" (400) usam o código de erro do HTTP.
 function refused(error: string, extra: Record<string, unknown> = {}): Response {
   return json(200, { ok: false, error, ...extra });
 }
@@ -371,8 +377,14 @@ async function prepare(
   request: Request,
   deps: RouteDeps,
 ): Promise<Response | { access: StripeAccess; body: Record<string, unknown> }> {
-  const problem = await checkCaller(deps.fetch, deps.supabase, request.headers.get("authorization"));
+  const problem = await checkCaller(
+    deps.fetch,
+    deps.supabase,
+    request.headers.get("authorization"),
+    deps.env.STRIPE_OWNER_EMAIL,
+  );
   if (problem === "auth") return json(401, { ok: false, error: "auth" });
+  if (problem === "forbidden") return json(403, { ok: false, error: "forbidden" });
   if (problem) return refused(problem);
   const stripe = readStripeKey(deps.env);
   if (stripe.problem) return refused("not_configured", { problem: stripe.problem });
@@ -411,7 +423,14 @@ export async function handleLinks(request: Request, deps: RouteDeps): Promise<Re
   if (cursor === undefined) return json(400, { ok: false, error: "bad_request" });
   try {
     const page = await listPaymentLinks(ready.access, cursor);
-    return json(200, { ok: true, links: page.links, next: page.next, live: isLiveKey(ready.access.key) });
+    return json(200, {
+      ok: true,
+      links: page.links,
+      next: page.next,
+      live: isLiveKey(ready.access.key),
+      // false = é a chave secreta completa (sk_…): funciona, mas a janela recomenda trocar pela restrita
+      restricted: ready.access.key.startsWith("rk_"),
+    });
   } catch (err) {
     return failed(err);
   }

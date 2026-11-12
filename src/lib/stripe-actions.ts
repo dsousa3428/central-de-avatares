@@ -5,12 +5,13 @@
 // de verdade é o servidor (./stripe-server) — a chave nunca vem para o navegador.
 
 import { errorMessage } from "./errors";
-import { defaultCurrency } from "./sales";
-import { saveSale } from "./sales-actions";
+import { cleanRates, defaultCurrency } from "./sales";
+import { saleOf, saveSale } from "./sales-actions";
 import { getStore } from "./store";
 import {
   matchLinks,
   startOfDay,
+  stillAsPreviewed,
   type LinkMatching,
   type PlanRow,
   type StripeLink,
@@ -30,6 +31,8 @@ export type StripeProblem =
   | { kind: "stripe"; error: "key" | "permission" | "rate" | "unavailable" | "request"; detail: string }
   /** O servidor não conseguiu conferir o login no Supabase. */
   | { kind: "supabase" }
+  /** Logado, mas a Stripe do painel está reservada a outro e-mail (STRIPE_OWNER_EMAIL). */
+  | { kind: "forbidden" }
   | { kind: "auth" }
   | { kind: "offline" }
   | { kind: "unknown"; detail: string };
@@ -50,6 +53,7 @@ const STRIPE_ERRORS = new Set(["key", "permission", "rate", "unavailable", "requ
 function problemOf(status: number, body: Record<string, unknown> | null): StripeProblem {
   const error = typeof body?.error === "string" ? body.error : "";
   if (status === 401 || error === "auth") return { kind: "auth" };
+  if (error === "forbidden") return { kind: "forbidden" };
   if (error === "not_configured" && typeof body?.problem === "string" && KEY_PROBLEMS.has(body.problem)) {
     return { kind: "not_configured", problem: body.problem as "missing" | "publishable" | "format" | "exposed" };
   }
@@ -108,6 +112,8 @@ export interface StripeAccount {
   links: StripeLink[];
   /** true = chave de verdade (vendas reais) · false = chave de teste. */
   live: boolean;
+  /** true = chave restrita (rk_…), a recomendada · false = a chave secreta completa (sk_…). */
+  restricted: boolean;
 }
 
 /** Todos os links de pagamento da conta Stripe. É também o teste de que a ligação funciona. */
@@ -115,33 +121,52 @@ export async function fetchStripeLinks(): Promise<StripeAccount> {
   const links: StripeLink[] = [];
   let cursor: string | null = null;
   let live = true;
+  let restricted = true;
   for (let i = 0; i < MAX_CALLS; i++) {
     const body = await call("/api/stripe/links", { cursor });
     if (Array.isArray(body.links)) links.push(...body.links.filter(isLink));
     live = body.live !== false;
+    restricted = body.restricted !== false;
     cursor = typeof body.next === "string" && body.next ? body.next : null;
     if (!cursor) break;
   }
-  return { links, live };
+  return { links, live, restricted };
 }
 
-/** As vendas pagas de cada link desde `sinceDay` (AAAA-MM-DD, no horário do aparelho). Três links por vez. */
+/** Quem pediu a busca desistiu dela? (a janela foi fechada) */
+export interface Cancel {
+  cancelled: boolean;
+}
+
+/**
+ * As vendas pagas de cada link desde `sinceDay` (AAAA-MM-DD, no horário do aparelho).
+ * Três links por vez; se um pedido falhar (ou a janela for fechada), os outros param.
+ */
 export async function fetchStripeSales(
   linkIds: readonly string[],
   sinceDay: string,
   onProgress?: (done: number, total: number) => void,
+  cancel?: Cancel,
 ): Promise<Map<string, StripeSale[]>> {
   const since = startOfDay(sinceDay);
   const result = new Map<string, StripeSale[]>();
   const queue = [...linkIds];
   let done = 0;
+  let stopped = false;
+  const halted = () => stopped || cancel?.cancelled === true;
   onProgress?.(0, linkIds.length);
   async function worker() {
-    for (let link = queue.shift(); link !== undefined; link = queue.shift()) {
+    for (let link = queue.shift(); link !== undefined && !halted(); link = queue.shift()) {
       const sales: StripeSale[] = [];
       let cursor: string | null = null;
-      for (let i = 0; i < MAX_CALLS; i++) {
-        const body = await call("/api/stripe/sales", { link, since, cursor });
+      for (let i = 0; i < MAX_CALLS && !halted(); i++) {
+        let body: Record<string, unknown>;
+        try {
+          body = await call("/api/stripe/sales", { link, since, cursor });
+        } catch (err) {
+          stopped = true;
+          throw err;
+        }
         if (Array.isArray(body.sales)) sales.push(...body.sales.filter(isSale));
         cursor = typeof body.next === "string" && body.next ? body.next : null;
         if (!cursor) break;
@@ -197,12 +222,22 @@ export async function applyStripePlan(
     for (let row = queue.shift(); row !== undefined; row = queue.shift()) {
       try {
         // (o avatar é lido agora: pode ter sido apagado em outra aba enquanto a lista estava na tela)
-        const avatar = getStore().avatars.find((item) => item.id === row.avatarId);
+        const store = getStore();
+        const avatar = store.avatars.find((item) => item.id === row.avatarId);
         if (!avatar) throw new Error("Este avatar não existe mais.");
+        // A conferência mostrou um "antes"; se ele mudou (um valor digitado em outra aba ou aparelho
+        // nesse meio-tempo), gravar por cima apagaria algo que o dono nunca viu na lista.
+        if (!stillAsPreviewed(saleOf(store.sales, row.avatarId, row.week), row.current)) {
+          throw new Error("o lançamento desta semana mudou depois da conferência. Toque em Stripe de novo para conferir.");
+        }
+        const rate = row.next.currency === "BRL" ? null : cleanRates(store.settings?.brl_rates)[row.next.currency];
         await saveSale(avatar, row.week, {
           amount: row.next.amount,
           currency: row.next.currency,
           sales_count: row.next.count,
+          // moedas somadas pelas cotações de hoje: a cotação guardada no lançamento tem de ser a mesma,
+          // senão o total em reais sairia diferente da soma que a conferência mostrou
+          ...(row.converted && rate !== undefined ? { brl_rate: rate } : {}),
         });
         result.saved += 1;
       } catch (err) {
