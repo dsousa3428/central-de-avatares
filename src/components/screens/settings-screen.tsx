@@ -11,6 +11,7 @@ import { describePlan, planFromSettings } from "@/lib/warmup";
 import { BackupSection } from "@/components/backup/backup-section";
 import { InstallSection } from "@/components/settings/install-section";
 import { LoginPasswordForm } from "@/components/settings/login-password-form";
+import { StripeSection } from "@/components/settings/stripe-section";
 import { VaultSettings } from "@/components/vault/vault-settings";
 import { DefaultPlanForm } from "@/components/warmup/default-plan-form";
 import { PageHeader } from "@/components/shell/page-header";
@@ -198,6 +199,8 @@ export function SettingsScreen() {
             )}
           </Section>
         </div>
+
+        <StripeSection />
 
         <BackupSection />
 

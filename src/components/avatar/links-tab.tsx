@@ -126,7 +126,16 @@ function MainLinksForm({ avatar, onClose }: { avatar: Avatar; onClose: () => voi
   return (
     <FormModal title="Links principais" onClose={onClose} onSubmit={submit}>
       {MAIN_LINKS.map((link) => (
-        <Field key={link.key} label={link.label} optional>
+        <Field
+          key={link.key}
+          label={link.label}
+          optional
+          hint={
+            link.key === "checkout_url"
+              ? "Vende pela Stripe? Cole aqui o link de pagamento (buy.stripe.com/…): é por ele que o painel busca as vendas deste avatar."
+              : undefined
+          }
+        >
           <Input
             value={values[link.key]}
             onChange={(e) => setValues((current) => ({ ...current, [link.key]: e.target.value }))}

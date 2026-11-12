@@ -73,6 +73,33 @@ const S = SHOTS + '/';
   await page.getByRole('link', { name: 'Vendas' }).click();
   await page.getByRole('heading', { name: 'Vendas', exact: true }).waitFor();
   await check('vendas');
+  // a janela da Stripe com nome, link e valores enormes (as respostas das rotas são simuladas aqui mesmo)
+  const site = psql(`select sales_site_url from public.avatars where id = '${aid}'`);
+  const reply = (body) => (request) => request.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+  const stripe = () => page.locator('dialog[open]').last();
+  const checkStripe = async (name) => {
+    await page.waitForTimeout(350);
+    const extra = await stripe().evaluate((element) => {
+      const body = element.querySelector('.overflow-y-auto');
+      return Math.max(body ? body.scrollWidth - body.clientWidth : 0, document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    });
+    results.push(`${extra > 0 ? '✗' : '✓'} ${name}${extra > 0 ? ` (sobra ${extra}px)` : ''}`);
+    await page.screenshot({ path: `${S}90-stress-${name}.png` });
+  };
+  await page.route('**/api/stripe/links', reply({ ok: true, live: false, next: null, links: [{ id: 'plink_1', url: site, active: false }, { id: 'plink_2', url: `https://buy.stripe.com/${long}${long}${long}`, active: true }] }));
+  await page.route('**/api/stripe/sales', reply({ ok: true, next: null, sales: [{ t: Math.floor(Date.now() / 1000), a: 98765432199, c: 'clp' }, { t: Math.floor(Date.now() / 1000), a: 12345678900, c: 'usd' }] }));
+  await page.getByRole('button', { name: 'Stripe', exact: true }).click();
+  await stripe().getByRole('heading', { name: 'Avatares ligados' }).waitFor();
+  await stripe().getByText(/da Stripe sem avatar/).click();
+  await checkStripe('stripe-ligados');
+  await stripe().getByRole('button', { name: 'Buscar vendas' }).click();
+  await stripe().getByText(/para atualizar/).waitFor();
+  await checkStripe('stripe-conferencia');
+  await stripe().getByRole('button', { name: 'Voltar' }).click();
+  await stripe().getByRole('button', { name: 'Fechar', exact: true }).last().click();
+  await page.waitForFunction(() => !document.querySelector('dialog[open]'));
+  await page.unroute('**/api/stripe/links');
+  await page.unroute('**/api/stripe/sales');
   await page.getByRole('button', { name: 'Mais', exact: true }).click();
   await page.locator('dialog[open]').getByRole('link', { name: 'Quedas de contas' }).click();
   await page.getByRole('heading', { name: 'Quedas', exact: true }).waitFor();

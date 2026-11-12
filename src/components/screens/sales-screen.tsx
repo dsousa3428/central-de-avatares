@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Coins, TriangleAlert } from "lucide-react";
+import { Coins, RefreshCw, TriangleAlert } from "lucide-react";
 import { isValidISODate, todayISO } from "@/lib/dates";
 import { plural } from "@/lib/format";
 import {
@@ -29,6 +29,7 @@ import type { WeeklySale } from "@/lib/types";
 import { ExamplesNotice } from "@/components/common/examples-notice";
 import { RankedList, type RankedRow } from "@/components/common/ranked-list";
 import { RatesForm } from "@/components/sales/rates-form";
+import { StripeDialog } from "@/components/sales/stripe-dialog";
 import { useRates } from "@/components/sales/use-rates";
 import { WeekChart } from "@/components/sales/week-chart";
 import { WeekEntries } from "@/components/sales/week-entries";
@@ -76,6 +77,7 @@ export function SalesScreen() {
   const [period, setPeriod] = useState<Period>("12");
   const [pickedCountry, setPickedCountry] = useState("");
   const [editingRates, setEditingRates] = useState(false);
+  const [stripeOpen, setStripeOpen] = useState(false);
   // (esta tela fica guardada enquanto se usa as outras: um país apagado lá não pode continuar filtrando aqui)
   const countryId = db.countries.some((country) => country.id === pickedCountry) ? pickedCountry : "";
   const month = currentMonth(today);
@@ -154,7 +156,15 @@ export function SalesScreen() {
       <ExamplesNotice />
 
       <div className="space-y-4">
-        <Section title="Lançar vendas" subtitle="Digite o valor da semana de cada avatar e aperte Enter.">
+        <Section
+          title="Lançar vendas"
+          subtitle="Digite o valor da semana de cada avatar e aperte Enter."
+          actions={
+            <Button size="sm" variant="soft" title="Buscar as vendas na Stripe" onClick={() => setStripeOpen(true)}>
+              <RefreshCw className="size-4" /> Stripe
+            </Button>
+          }
+        >
           <div className="mb-2 rounded-xl border border-line bg-surface-2/60 px-2 py-2">
             <WeekNav week={week} onChange={setWeek} today={today} />
           </div>
@@ -265,6 +275,7 @@ export function SalesScreen() {
       </div>
 
       {editingRates ? <RatesForm onClose={() => setEditingRates(false)} /> : null}
+      {stripeOpen ? <StripeDialog onClose={() => setStripeOpen(false)} /> : null}
     </>
   );
 }

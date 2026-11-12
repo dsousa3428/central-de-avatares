@@ -25,7 +25,7 @@ import {
   type Usage,
 } from "./selectors";
 import type { Db } from "./store";
-import type { Account, AppPrefs } from "./types";
+import type { Account, AppPrefs, Avatar } from "./types";
 
 export type WarningKind =
   | "recurso_duplicado" // o mesmo celular / perfil / proxy em duas contas vivas
@@ -87,6 +87,27 @@ interface Reused {
   fallenIds: string[];
   /** De quem era, por extenso: "Fra' Salvio · @fra.salvio (1ª geração), caída em 03/11/2026". */
   from: string;
+}
+
+/**
+ * Os avatares ativos que deveriam ter um lançamento de vendas numa semana e não têm.
+ * Só quem tinha conta no ar naquela semana: criada até o domingo e ainda de pé na
+ * segunda. (Avatar novo, ou que passou a semana inteira sem conta, não tinha o que lançar.)
+ */
+export function avatarsMissingSales(db: Pick<Db, "avatars" | "accounts" | "sales">, week: string): Avatar[] {
+  const lastDay = weekEnd(week);
+  const launched = new Set(db.sales.filter((sale) => sale.week_start === week).map((sale) => sale.avatar_id));
+  return db.avatars.filter(
+    (avatar) =>
+      avatar.status === "ativo" &&
+      !launched.has(avatar.id) &&
+      db.accounts.some(
+        (account) =>
+          account.avatar_id === avatar.id &&
+          account.created_on <= lastDay &&
+          (account.status !== "caida" || (account.fell_on !== null && account.fell_on >= week)),
+      ),
+  );
 }
 
 export function buildWarnings(db: Db, today: string): Warning[] {
@@ -286,21 +307,7 @@ export function buildWarnings(db: Db, today: string): Warning[] {
 
   // --- semana passada sem lançamento de vendas
   const lastWeek = addWeeks(weekStart(today), -1);
-  const lastDay = weekEnd(lastWeek);
-  const launched = new Set(db.sales.filter((sale) => sale.week_start === lastWeek).map((sale) => sale.avatar_id));
-  const missing = db.avatars.filter(
-    (avatar) =>
-      avatar.status === "ativo" &&
-      !launched.has(avatar.id) &&
-      // Só quem tinha conta no ar naquela semana: criada até o domingo e ainda de pé na segunda.
-      // (Avatar novo, ou que passou a semana inteira sem conta, não tinha o que lançar.)
-      db.accounts.some(
-        (account) =>
-          account.avatar_id === avatar.id &&
-          account.created_on <= lastDay &&
-          (account.status !== "caida" || (account.fell_on !== null && account.fell_on >= lastWeek)),
-      ),
-  );
+  const missing = avatarsMissingSales(db, lastWeek);
   if (missing.length > 0) {
     warnings.push({
       id: `vendas:${lastWeek}`,

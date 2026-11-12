@@ -140,7 +140,15 @@ async function up() {
 
   writeFileSync(
     join(root, ".env.local"),
-    `# Gerado por dev/local.mjs — aponta o app para o Supabase LOCAL de testes.\nNEXT_PUBLIC_SUPABASE_URL=${API}\nNEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${env.ANON_KEY}\n`,
+    [
+      "# Gerado por dev/local.mjs — aponta o app para o Supabase LOCAL de testes.",
+      `NEXT_PUBLIC_SUPABASE_URL=${API}`,
+      `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${env.ANON_KEY}`,
+      "# Stripe de mentira dos testes (dev/stripe-mock.cjs). A \"chave\" abaixo não é uma chave de verdade.",
+      "STRIPE_SECRET_KEY=rk_test_painel_local",
+      "STRIPE_API_BASE=http://127.0.0.1:54390",
+      "",
+    ].join("\n"),
   );
   console.log(`\nPronto. Supabase local em ${API}`);
   console.log(`Login de teste: ${TEST_USER.email} / ${TEST_USER.password}`);

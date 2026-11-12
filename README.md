@@ -1,6 +1,6 @@
 # Central de Avatares
 
-Painel **privado**, de um único usuário, para organizar contas de Instagram de avatares de IA em vários países: países, avatares, contas (gerações), aquecimento com tarefas do dia, a estrutura de vendas de cada avatar (site, entregável, checkout e automação), cofre de senhas, vendas semanais, reposição de contas que caem (com checklist), avisos automáticos de risco, celulares, perfis do navegador anti-detect, links, kit de reposição e uma visão em planilha de tudo.
+Painel **privado**, de um único usuário, para organizar contas de Instagram de avatares de IA em vários países: países, avatares, contas (gerações), aquecimento com tarefas do dia, a estrutura de vendas de cada avatar (site, entregável, checkout e automação), cofre de senhas, vendas semanais (digitadas ou buscadas na Stripe), reposição de contas que caem (com checklist), avisos automáticos de risco, celulares, perfis do navegador anti-detect, links, kit de reposição e uma visão em planilha de tudo.
 
 > O painel é só de organização. Ele **não acessa o Instagram**, não automatiza nada e não faz login em conta nenhuma.
 
@@ -16,6 +16,7 @@ Painel **privado**, de um único usuário, para organizar contas de Instagram de
 | **e** | Botão "Conta caiu" + assistente de reposição com checklist + avisos automáticos + quedas | ✅ pronta |
 | **f** | App instalável, backup (baixar e restaurar), busca global, trocar a senha de login | ✅ pronta |
 | **+** | Estrutura do avatar: site, entregável, checkout e automação, lembrados nos dias em que a conta descansa | ✅ pronta |
+| **+** | Vendas pela Stripe: o painel busca as vendas de cada link de pagamento e lança na semana do avatar | ✅ pronta (precisa da chave — veja abaixo) |
 
 ---
 
@@ -108,6 +109,33 @@ Abra o endereço no celular e entre com o e-mail e a senha que você criou no Su
 
 Daqui para frente, toda atualização enviada ao GitHub é publicada sozinha pela Vercel.
 
+### Parte 3 (opcional) — Stripe: buscar as vendas sozinho
+
+Se você vende por **links de pagamento da Stripe** (endereços que começam com `buy.stripe.com/`), o painel pode buscar as vendas de cada avatar em vez de você digitar. É uma vez só.
+
+**1. Criar a chave na Stripe (só de leitura)**
+
+1. Entre em <https://dashboard.stripe.com>. Confira que **não** está em modo de teste (a chave certa começa com `rk_live_`).
+2. Abra **Desenvolvedores → Chaves da API** e clique em **Criar chave restrita**.
+3. Nome: `Central de Avatares`. Nas permissões, deixe **tudo em "Nenhuma"**, menos duas, que ficam em **"Leitura"**: **Checkout Sessions** e **Payment Links**.
+4. Crie a chave e copie o valor (a Stripe só mostra uma vez).
+
+**2. Guardar a chave na Vercel**
+
+1. No projeto do painel: **Settings → Environment Variables**.
+2. **Key**: `STRIPE_SECRET_KEY` · **Value**: a chave copiada · **Save**.
+3. **Deployments** → nos três pontinhos da publicação mais recente → **Redeploy** (a chave só passa a valer numa publicação nova).
+
+**3. Dizer qual link é de qual avatar**
+
+Em cada avatar: aba **Links → Editar** → no campo **Checkout**, cole o link de pagamento da Stripe daquele avatar. Se o avatar tiver mais de um link de pagamento, coloque os outros em **Outros links**.
+
+**4. Usar**
+
+Na tela **Vendas**, toque em **Stripe**. O painel mostra de que avatar é cada link, busca as vendas do período e mostra o que vai mudar; nada é gravado antes de você tocar em **Lançar**.
+
+> **Cuidados com a chave.** Ela vai **só** no campo da Vercel: nunca no código, nunca numa conversa, nunca num print. O nome da variável não pode começar com `NEXT_PUBLIC_` (essas são públicas). Se a chave vazar, apague-a na Stripe e crie outra.
+
 ### Se algo der errado
 
 | O que aparece | O que fazer |
@@ -134,6 +162,7 @@ Daqui para frente, toda atualização enviada ao GitHub é publicada sozinha pel
 - **Cofre de senhas** — na aba *Conta atual* de cada avatar há o bloco **Senhas e códigos**: senha do Instagram, senha do e-mail, e-mail de recuperação e códigos de backup/2FA. Na primeira vez você cria a **senha-mestra**; depois é só destrancar. Os campos ficam escondidos, com botões de **mostrar** e **copiar**. O cofre tranca sozinho depois de alguns minutos sem uso (o tempo fica em Configurações), ao recarregar a página e ao sair. Contas antigas têm o mesmo bloco no *Histórico* (ícone da chave).
 - **Vendas** — toda semana (de segunda a domingo), digite quanto cada avatar vendeu: escolha a semana com as setas, escreva o valor na linha do avatar e aperte Enter (o cursor já desce para o avatar de baixo: dá para digitar tudo em sequência). Os três pontinhos abrem os detalhes (quantidade de vendas, observação, qual conta estava no ar, moeda e cotação daquela venda). A tela mostra os totais da semana, do mês e do período, o gráfico por semana (no celular, arraste o dedo sobre ele para passar pelas semanas), o ranking de avatares e os totais por país. O mês de uma semana é aquele em que cai a maior parte dos dias dela: a semana de 30 de novembro a 6 de dezembro conta para dezembro.
   - **Cotações**: você digita quanto vale cada moeda em reais e o painel passa a somar moedas diferentes em reais. Cada venda guarda a cotação do dia em que foi lançada, para o total de uma semana antiga não mudar quando você atualizar a cotação (as vendas lançadas antes de a moeda ter cotação ficam com a primeira que você digitar). Digitou uma cotação errada? Corrija e marque **Usar também nas vendas já lançadas**.
+  - **Stripe**: o botão **Stripe** (no bloco *Lançar vendas*) busca as vendas pagas de cada link de pagamento e lança na semana certa do avatar — o painel sabe de quem é cada venda pelo link que você colou no campo *Checkout* do avatar. Antes de gravar, ele mostra o que muda em cada semana (o valor que estava no painel e o da Stripe) e você pode desmarcar o que não quiser. Semana sem venda na Stripe não é alterada; a exceção é a **semana passada**: avatar ligado à Stripe que não vendeu nada ganha um lançamento de 0, para o aviso de "semana sem lançamento" não ficar cobrando. Vale o valor cobrado do cliente (reembolsos não são descontados; em assinaturas, só a primeira cobrança entra). A semana segue o horário do aparelho. Vendas em mais de uma moeda na mesma semana são somadas pelas suas cotações; se faltar cotação, o painel avisa o que ficou de fora. Como ligar: [Parte 3](#parte-3-opcional--stripe-buscar-as-vendas-sozinho).
 - **Planilha** — os mesmos dados em formato de tabela (Contas, Avatares, Vendas, Celulares e Perfis). Toque no título de uma coluna para ordenar, use os filtros e a busca, e edite direto nas células das colunas marcadas com um lápis. **Copiar** leva a tabela para colar no Excel ou no Google Planilhas; **Baixar** gera um arquivo CSV.
 - **Infraestrutura** — celulares e perfis do anti-detect, mostrando qual conta está em cada um, quais estão livres e quais já foram usados por conta que caiu. No celular fica no botão **Mais**.
 - **Buscar** — encontra avatares, contas (pelo @ ou pelo e-mail), celulares, perfis anti-detect (pelo número) e países. No celular: botão **Buscar** na tela Hoje ou no menu **Mais**; no computador: no menu lateral ou com **Ctrl+K**.
@@ -149,9 +178,10 @@ O painel avisa quando você escolhe um celular, perfil ou proxy que já está em
 - **Login único**, por e-mail e senha, com cadastro público desligado.
 - **Row Level Security em todas as tabelas**: cada linha pertence a um usuário e só ele, logado, consegue ler ou alterar. Visitante sem login não acessa nada.
 - **Nenhuma chave secreta no código**: as duas informações do Supabase ficam nas variáveis de ambiente da Vercel.
+- **Stripe (se você ligar)**: a chave da Stripe fica só numa variável de ambiente da Vercel e é usada por um pedaço pequeno de código que roda no servidor — é o único do painel. Esse código só **lê** (links de pagamento e vendas), só responde a quem está logado no painel, e se recusa a trabalhar se o cadastro público do Supabase estiver ligado. Para o seu aparelho vêm apenas o endereço de cada link e, de cada venda, a hora, o valor e a moeda — nada de nome, e-mail ou cartão de cliente. A chave nunca chega ao navegador.
 - **Links abrem sem revelar a origem**: ao abrir seu site de vendas ou qualquer link, o site de destino não recebe o endereço do painel.
 - O painel pede aos buscadores para **não ser indexado** e não pode ser embutido em outros sites.
-- Como camada extra, o navegador é instruído (Content-Security-Policy) a só carregar código do próprio painel e a só abrir conexões de dados com o painel e com o seu Supabase.
+- Como camada extra, o navegador é instruído (Content-Security-Policy) a só carregar código do próprio painel e a só abrir conexões de dados com o painel e com o seu Supabase. (A conversa com a Stripe é feita pelo servidor do painel, não pelo navegador.)
 
 ### Backup e aplicativo instalado
 
