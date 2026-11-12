@@ -10,7 +10,7 @@ const { BASE, USER, psql, resetData, ok, section, assert, openPhone, finish, fai
 (async () => {
   resetData();
   const session = await openPhone(chromium);
-  const { page, dialog, shot, toast, save, noDialog, overflow, clipboard } = session;
+  const { page, dialog, shot, toast, save, noDialog, overflow, clipboard, more } = session;
 
   // ---------------------------------------------------------------
   section('Proteção de rota + login');
@@ -25,11 +25,11 @@ const { BASE, USER, psql, resetData, ok, section, assert, openPhone, finish, fai
   await shot('20-login-erro');
   await page.getByLabel('Senha', { exact: true }).fill(USER.password);
   await page.getByRole('button', { name: 'Entrar' }).click();
-  await page.getByRole('heading', { name: 'Hoje' }).waitFor({ timeout: 30000 });
+  await page.getByRole('heading', { name: 'Hoje', exact: true }).waitFor({ timeout: 30000 });
   ok('login correto abre a tela Hoje');
   assert(psql("select count(*) from public.countries where is_example") === '1', 'exemplo Itália criado no banco');
   assert(psql("select count(*) from public.accounts where is_example") === '2', 'duas contas de exemplo criadas');
-  assert(psql("select (prefs->>'examples_version') from public.settings") === '1', 'configurações registram a versão dos exemplos');
+  assert(psql("select (prefs->>'examples_version') from public.settings") === '2', 'configurações registram a versão dos exemplos');
   await overflow('Hoje');
 
   // ---------------------------------------------------------------
@@ -174,7 +174,7 @@ const { BASE, USER, psql, resetData, ok, section, assert, openPhone, finish, fai
   section('Histórico');
   await page.getByRole('tab', { name: /^Histórico/ }).click();
   await page.getByText('2 contas').waitFor();
-  await page.getByText('Linha do tempo (3)').click();
+  await page.getByText('Linha do tempo (5)').click();
   await page.getByText('Conta caiu — Denúncias').waitFor();
   ok('histórico lista as duas gerações e a linha do tempo');
   await shot('28-historico');
@@ -244,7 +244,7 @@ const { BASE, USER, psql, resetData, ok, section, assert, openPhone, finish, fai
 
   // ---------------------------------------------------------------
   section('Infraestrutura');
-  await page.getByRole('link', { name: 'Infra' }).click();
+  await more("Infraestrutura");
   await page.getByRole('heading', { name: 'Infraestrutura' }).waitFor();
   await page.getByText('3 de 3 celulares livres').waitFor().catch(() => {});
   await overflow('Infraestrutura');
@@ -274,19 +274,19 @@ const { BASE, USER, psql, resetData, ok, section, assert, openPhone, finish, fai
 
   // ---------------------------------------------------------------
   section('Configurações: tema escuro e exemplos');
-  await page.getByRole('link', { name: 'Config' }).click();
+  await more("Configurações");
   await page.getByRole('radio', { name: 'Escuro' }).click();
   assert((await page.evaluate(() => document.documentElement.dataset.theme)) === 'dark', 'tema escuro aplicado');
   await shot('31-config-escuro');
   await page.getByRole('link', { name: 'Hoje' }).click();
-  await page.getByRole('heading', { name: 'Hoje' }).waitFor();
+  await page.getByRole('heading', { name: 'Hoje', exact: true }).waitFor();
   await shot('32-hoje-escuro');
   await page.getByRole('link', { name: 'Países' }).click();
   await page.getByRole('tab', { name: /Itália/ }).click();
   await page.getByRole('link', { name: /Fra' Salvio/ }).click();
   await page.getByRole('heading', { name: "Fra' Salvio" }).waitFor();
   await shot('33-avatar-escuro');
-  await page.getByRole('link', { name: 'Config' }).click();
+  await more("Configurações");
   await page.getByRole('heading', { name: 'Configurações' }).waitFor();
   await page.reload();
   await page.getByRole('heading', { name: 'Configurações' }).waitFor({ timeout: 20000 });
@@ -330,7 +330,7 @@ const { BASE, USER, psql, resetData, ok, section, assert, openPhone, finish, fai
 
   // ---------------------------------------------------------------
   section('Sair');
-  await page.getByRole('link', { name: 'Config' }).click();
+  await more("Configurações");
   // "Sair" recarrega a página inteira de propósito: espera esse recarregamento terminar
   await Promise.all([page.waitForEvent('load'), page.getByRole('button', { name: 'Sair', exact: true }).click()]);
   await page.waitForURL('**/login');

@@ -71,12 +71,19 @@ async function openPhone(chromium, options = {}) {
       assert(extra <= 0, `sem rolagem lateral em ${where}`);
     },
     clipboard: () => page.evaluate(() => navigator.clipboard.readText()),
+    /** Abre uma tela que, no celular, fica dentro do menu "Mais" (Infraestrutura, Configurações). */
+    more: async (label) => {
+      await page.getByRole("button", { name: "Mais", exact: true }).click();
+      await page.locator("dialog[open]").getByRole("link", { name: label }).click();
+      await page.waitForFunction(() => !document.querySelector("dialog[open]"), null, { timeout: 8000 });
+      await page.getByRole("heading", { name: label, exact: true }).waitFor();
+    },
     login: async () => {
       await page.goto(BASE + "/login");
       await page.getByLabel("E-mail").fill(USER.email);
       await page.getByLabel("Senha", { exact: true }).fill(USER.password);
       await page.getByRole("button", { name: "Entrar" }).click();
-      await page.getByRole("heading", { name: "Hoje" }).waitFor({ timeout: 30000 });
+      await page.getByRole("heading", { name: "Hoje", exact: true }).waitFor({ timeout: 30000 });
     },
   };
 }

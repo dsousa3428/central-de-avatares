@@ -39,12 +39,12 @@ export function VideosTab({ avatar }: { avatar: Avatar }) {
   const visible = filter === "todos" ? videos : videos.filter((v) => v.status === filter);
 
   async function save(item: ModelVideo) {
-    await updateRow("avatars", avatar.id, { model_videos: upsertById(videos, item) });
+    await updateRow("avatars", avatar.id, (row) => ({ model_videos: upsertById(row.model_videos, item) }));
     toast.success("Vídeo salvo");
   }
 
   async function remove(id: string) {
-    await updateRow("avatars", avatar.id, { model_videos: removeById(videos, id) });
+    await updateRow("avatars", avatar.id, (row) => ({ model_videos: removeById(row.model_videos, id) }));
     toast.success("Vídeo apagado");
   }
 
@@ -54,7 +54,9 @@ export function VideosTab({ avatar }: { avatar: Avatar }) {
       await updateRow(
         "avatars",
         avatar.id,
-        { model_videos: upsertById(videos, { ...video, status }) },
+        (row) => ({
+          model_videos: (row.model_videos ?? []).map((v) => (v.id === video.id ? { ...v, status } : v)),
+        }),
         { optimistic: true },
       );
     } catch (err) {

@@ -1,6 +1,11 @@
-/** Junta classes CSS ignorando valores vazios. */
+import { twMerge } from "tailwind-merge";
+
+/**
+ * Junta classes CSS ignorando valores vazios. Quando duas classes brigam pelo
+ * mesmo estilo (ex.: "w-full" e "w-16"), vale a que vem por último.
+ */
 export function cn(...parts: Array<string | false | null | undefined>): string {
-  return parts.filter(Boolean).join(" ");
+  return twMerge(parts.filter(Boolean).join(" "));
 }
 
 /** Identificador único para itens de listas (links, vídeos etc.). */

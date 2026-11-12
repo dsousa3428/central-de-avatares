@@ -9,9 +9,13 @@ Nada desta pasta vai para a Vercel. Ela existe para testar o painel de verdade (
 | `local.mjs` | Sobe/desliga um Supabase "de bolso" (Postgres + Auth + API) com Docker, aplica `supabase/schema.sql`, cria o usuário de teste e escreve o `.env.local`. |
 | `supabase-local/` | `docker-compose.yml`, scripts de inicialização do banco e o gateway que imita o endereço único do Supabase (`http://localhost:54321`). |
 | `e2e/etapa-a.cjs` | Teste de ponta a ponta da etapa (a), no tamanho de um celular. |
+| `e2e/etapa-b.cjs` | Etapa (b): aquecimento, tarefas da tela Hoje, dia pulado e empurrar o calendário, padrão em Configurações. |
+| `e2e/planilha.cjs` | Planilha: grade, edição nas células, ordenar, filtrar, buscar, copiar e baixar. |
 | `e2e/extras.cjs` | Situações de exceção: banco sem tabelas, queda de internet ao salvar e regras dos dados de exemplo. |
 | `e2e/robustez.cjs` | Dois aparelhos ao mesmo tempo, toques rápidos, falhas no meio de um salvamento, validações de digitação, sair em outra aba. |
-| `unit/format.test.mjs` | Testes rápidos das funções que interpretam números, links, @ e datas. |
+| `e2e/textos-longos.cjs` | Layout: com nomes, links e anotações enormes, nenhuma tela pode rolar para o lado num celular de 360 px. |
+| `e2e/botoes.cjs` | Layout: em 320, 360 e 390 px, nenhum botão (das telas e das janelas) pode ficar com o texto quebrado, cortado ou fora da tela. |
+| `unit/*.test.mjs` | Testes rápidos das regras puras: números, links, @ e datas; calendário de aquecimento; exportação. |
 
 As chaves do ambiente local são geradas na hora e ficam em `supabase-local/.env` (ignorado pelo git).
 
@@ -38,6 +42,14 @@ node dev/e2e/etapa-a.cjs
 ```
 
 ```bash
+node dev/e2e/etapa-b.cjs
+```
+
+```bash
+node dev/e2e/planilha.cjs
+```
+
+```bash
 node dev/e2e/extras.cjs
 ```
 
@@ -46,7 +58,15 @@ node dev/e2e/robustez.cjs
 ```
 
 ```bash
-node --test dev/unit/format.test.mjs
+node dev/e2e/textos-longos.cjs
+```
+
+```bash
+node dev/e2e/botoes.cjs
+```
+
+```bash
+npm run test:unit
 ```
 
 Login de teste: `teste@exemplo.com` / `senha-de-teste-123`.

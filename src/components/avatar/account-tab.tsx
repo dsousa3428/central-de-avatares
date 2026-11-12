@@ -5,7 +5,8 @@ import { AtSign, Pencil, Plus, UserRound } from "lucide-react";
 import { formatDate, formatDateTime, formatDuration, relativeDay } from "@/lib/dates";
 import { formatNumber, parseCount } from "@/lib/format";
 import { generationLabel, lifetimeDays, nextGeneration, phoneLabel, profileLabel } from "@/lib/selectors";
-import { logActivity, updateRow, useStore } from "@/lib/store";
+import { changeAccountStatus } from "@/lib/account-actions";
+import { updateRow, useStore } from "@/lib/store";
 import type { Account, AccountStatus, Avatar } from "@/lib/types";
 import { DetailList, DetailRow } from "@/components/common/detail-row";
 import { invalid } from "@/components/common/validation";
@@ -35,7 +36,6 @@ export function AccountTab({ avatar, account, accounts }: AccountTabProps) {
     <>
       {account ? (
         <CurrentAccount
-          avatar={avatar}
           account={account}
           onEdit={(status) => setEditing({ account, status })}
           onUpdateFollowers={() => setUpdatingFollowers(account)}
@@ -86,14 +86,13 @@ function NoAccount({ accounts, onCreate }: { accounts: Account[]; onCreate: () =
 }
 
 interface CurrentAccountProps {
-  avatar: Avatar;
   account: Account;
   /** Abre o formulário de edição (opcionalmente já com um status escolhido). */
   onEdit: (status?: AccountStatus) => void;
   onUpdateFollowers: () => void;
 }
 
-function CurrentAccount({ avatar, account, onEdit, onUpdateFollowers }: CurrentAccountProps) {
+function CurrentAccount({ account, onEdit, onUpdateFollowers }: CurrentAccountProps) {
   const db = useStore();
   const toast = useToast();
   const phone = db.phones.find((p) => p.id === account.phone_id);
@@ -108,14 +107,7 @@ function CurrentAccount({ avatar, account, onEdit, onUpdateFollowers }: CurrentA
       return;
     }
     try {
-      await updateRow("accounts", account.id, { status: next }, { optimistic: true });
-      await logActivity({
-        avatar_id: avatar.id,
-        account_id: account.id,
-        kind: "status_alterado",
-        message: `Status: ${ACCOUNT_STATUS[account.status].label} → ${ACCOUNT_STATUS[next].label}`,
-        is_example: account.is_example,
-      });
+      await changeAccountStatus(account, next);
       toast.success(`Status alterado para ${ACCOUNT_STATUS[next].label.toLowerCase()}`);
     } catch (err) {
       toast.error(err);

@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { LogOut, Monitor, Moon, ShieldCheck, Sparkles, Sun, Trash2 } from "lucide-react";
+import { LogOut, Monitor, Moon, Pencil, ShieldCheck, Sparkles, Sun, Trash2 } from "lucide-react";
 import { signOut, useAuth } from "@/lib/auth";
 import { countExamples, deleteExamples, EXAMPLES_VERSION, seedExamples } from "@/lib/examples";
 import { plural } from "@/lib/format";
 import { refresh, saveSettings, useStore } from "@/lib/store";
 import { setThemeChoice, useThemeChoice, type ThemeChoice } from "@/lib/theme";
+import { describePlan, planFromSettings } from "@/lib/warmup";
+import { DefaultPlanForm } from "@/components/warmup/default-plan-form";
 import { PageHeader } from "@/components/shell/page-header";
 import { Button } from "@/components/ui/button";
 import { Section } from "@/components/ui/card";
@@ -15,7 +17,6 @@ import { Segmented } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/toast";
 
 const UPCOMING: Array<{ step: string; title: string; text: string }> = [
-  { step: "b", title: "Aquecimento + tela Hoje", text: "Calendário de 10 dias por conta, minutos de cada dia, botão “feito” e data de fim calculada." },
   { step: "c", title: "Cofre de senhas", text: "Senhas e códigos de backup criptografados no seu aparelho com uma senha-mestra." },
   { step: "d", title: "Vendas", text: "Lançamento semanal, totais, gráfico, ranking e conversão para reais." },
   { step: "e", title: "“Conta caiu” + avisos", text: "Assistente de reposição com checklist e avisos automáticos de risco." },
@@ -29,6 +30,8 @@ export function SettingsScreen() {
   const confirm = useConfirm();
   const theme = useThemeChoice();
   const [busy, setBusy] = useState<"delete" | "seed" | null>(null);
+  const [editingPlan, setEditingPlan] = useState(false);
+  const plan = planFromSettings(db.settings);
 
   const examples = countExamples(db);
   const summary = [
@@ -131,6 +134,34 @@ export function SettingsScreen() {
           />
         </Section>
 
+        <Section
+          title="Padrão de aquecimento"
+          subtitle="O calendário que cada conta nova recebe."
+          actions={
+            <Button size="sm" onClick={() => setEditingPlan(true)}>
+              <Pencil className="size-4" /> Editar
+            </Button>
+          }
+        >
+          <p className="text-[15px] font-medium">{describePlan(plan)}</p>
+          <ul className="mt-2 flex flex-wrap gap-1.5">
+            {plan.days.map((day, index) => (
+              <li
+                key={index}
+                className={
+                  day.use
+                    ? "rounded-lg bg-amber-500/18 px-2 py-1 text-xs font-semibold tabular-nums text-amber-800 dark:text-amber-300"
+                    : "rounded-lg bg-surface-2 px-2 py-1 text-xs text-muted"
+                }
+                title={day.use ? `Dia ${index + 1}: uso de ${day.minutes} min` : `Dia ${index + 1}: descanso`}
+              >
+                {index + 1}
+                {day.use ? ` · ${day.minutes} min` : " · descanso"}
+              </li>
+            ))}
+          </ul>
+        </Section>
+
         <div id="exemplos" className="scroll-mt-6">
           <Section title="Dados de exemplo" subtitle="Itália e Fra' Salvio, com dados fictícios, para conhecer o painel.">
             {examples.total > 0 ? (
@@ -200,6 +231,8 @@ export function SettingsScreen() {
           nenhuma. Seus dados ficam no seu Supabase, visíveis apenas com o seu login.
         </p>
       </div>
+
+      {editingPlan ? <DefaultPlanForm onClose={() => setEditingPlan(false)} /> : null}
     </>
   );
 }

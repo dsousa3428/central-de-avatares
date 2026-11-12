@@ -26,12 +26,12 @@ export function ReferencesTab({ avatar }: { avatar: Avatar }) {
   const profiles = avatar.reference_profiles ?? [];
 
   async function save(item: ReferenceProfile) {
-    await updateRow("avatars", avatar.id, { reference_profiles: upsertById(profiles, item) });
+    await updateRow("avatars", avatar.id, (row) => ({ reference_profiles: upsertById(row.reference_profiles, item) }));
     toast.success("Perfil salvo");
   }
 
   async function remove(id: string) {
-    await updateRow("avatars", avatar.id, { reference_profiles: removeById(profiles, id) });
+    await updateRow("avatars", avatar.id, (row) => ({ reference_profiles: removeById(row.reference_profiles, id) }));
     toast.success("Perfil apagado");
   }
 

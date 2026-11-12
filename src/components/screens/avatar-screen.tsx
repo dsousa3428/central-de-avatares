@@ -19,6 +19,7 @@ import { NotesTab } from "@/components/avatar/notes-tab";
 import { OverviewTab } from "@/components/avatar/overview-tab";
 import { ReferencesTab } from "@/components/avatar/references-tab";
 import { VideosTab } from "@/components/avatar/videos-tab";
+import { WarmupTab } from "@/components/avatar/warmup-tab";
 import { AvatarPhoto } from "@/components/ui/avatar-photo";
 import { AvatarStatusBadge, ExampleBadge } from "@/components/ui/badge";
 import { Button, buttonClass } from "@/components/ui/button";
@@ -27,7 +28,7 @@ import { useConfirm } from "@/components/ui/confirm";
 import { Tabs, type TabItem } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/toast";
 
-const TAB_VALUES = ["geral", "conta", "links", "videos", "perfis", "kit", "historico", "notas"] as const;
+const TAB_VALUES = ["geral", "conta", "aquecimento", "links", "videos", "perfis", "kit", "historico", "notas"] as const;
 type TabValue = (typeof TAB_VALUES)[number];
 
 function isTab(value: string | null): value is TabValue {
@@ -110,6 +111,7 @@ function AvatarContent({ avatar, tab }: { avatar: Avatar; tab: TabValue }) {
   const tabs: TabItem<TabValue>[] = [
     { value: "geral", label: "Visão geral" },
     { value: "conta", label: "Conta atual" },
+    { value: "aquecimento", label: "Aquecimento" },
     { value: "links", label: "Links" },
     { value: "videos", label: "Vídeos", count: pendingVideos > 0 ? pendingVideos : undefined },
     { value: "perfis", label: "Perfis de exemplo" },
@@ -164,6 +166,7 @@ function AvatarContent({ avatar, tab }: { avatar: Avatar; tab: TabValue }) {
         />
       ) : null}
       {tab === "conta" ? <AccountTab avatar={avatar} account={account} accounts={accounts} /> : null}
+      {tab === "aquecimento" ? <WarmupTab account={account} /> : null}
       {tab === "links" ? <LinksTab avatar={avatar} /> : null}
       {tab === "videos" ? <VideosTab avatar={avatar} /> : null}
       {tab === "perfis" ? <ReferencesTab avatar={avatar} /> : null}

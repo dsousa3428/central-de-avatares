@@ -50,8 +50,12 @@ export function KitTab({ avatar }: { avatar: Avatar }) {
   const [editingHighlight, setEditingHighlight] = useState<KitHighlight | "new" | null>(null);
   const [editingProof, setEditingProof] = useState<LabeledLink | "new" | null>(null);
 
-  async function saveKit(patch: Partial<ReplacementKit>, message: string) {
-    await updateRow("avatars", avatar.id, { kit: { ...kit, ...patch } });
+  /** Grava uma mudança no kit, calculada a partir do kit como está agora (não do que a tela tinha). */
+  async function saveKit(change: (current: ReplacementKit) => Partial<ReplacementKit>, message: string) {
+    await updateRow("avatars", avatar.id, (row) => {
+      const current = row.kit ?? {};
+      return { kit: { ...current, ...change(current) } };
+    });
     toast.success(message);
   }
 
@@ -155,11 +159,11 @@ export function KitTab({ avatar }: { avatar: Avatar }) {
           fields={HIGHLIGHT_FIELDS}
           item={editingHighlight === "new" ? undefined : editingHighlight}
           defaults={{ text: "" }}
-          onSave={(item) => saveKit({ highlights: upsertById(highlights, item) }, "Destaque salvo")}
+          onSave={(item) => saveKit((k) => ({ highlights: upsertById(k.highlights, item) }), "Destaque salvo")}
           onDelete={
             editingHighlight === "new"
               ? undefined
-              : () => saveKit({ highlights: removeById(highlights, editingHighlight.id) }, "Destaque apagado")
+              : () => saveKit((k) => ({ highlights: removeById(k.highlights, editingHighlight.id) }), "Destaque apagado")
           }
           deleteTitle="Apagar este destaque?"
           onClose={() => setEditingHighlight(null)}
@@ -171,11 +175,11 @@ export function KitTab({ avatar }: { avatar: Avatar }) {
           title={editingProof === "new" ? "Nova foto / prova social" : "Editar foto / prova social"}
           fields={PROOF_FIELDS}
           item={editingProof === "new" ? undefined : editingProof}
-          onSave={(item) => saveKit({ proof_links: upsertById(proofs, item) }, "Link salvo")}
+          onSave={(item) => saveKit((k) => ({ proof_links: upsertById(k.proof_links, item) }), "Link salvo")}
           onDelete={
             editingProof === "new"
               ? undefined
-              : () => saveKit({ proof_links: removeById(proofs, editingProof.id) }, "Link apagado")
+              : () => saveKit((k) => ({ proof_links: removeById(k.proof_links, editingProof.id) }), "Link apagado")
           }
           deleteTitle="Apagar este link?"
           onClose={() => setEditingProof(null)}
@@ -191,7 +195,7 @@ function KitProfileForm({
   onClose,
 }: {
   kit: ReplacementKit;
-  onSave: (patch: Partial<ReplacementKit>, message: string) => Promise<void>;
+  onSave: (change: (current: ReplacementKit) => Partial<ReplacementKit>, message: string) => Promise<void>;
   onClose: () => void;
 }) {
   const [displayName, setDisplayName] = useState(kit.display_name ?? "");
@@ -200,11 +204,11 @@ function KitProfileForm({
 
   async function submit() {
     await onSave(
-      {
+      () => ({
         display_name: clean(displayName) ?? "",
         bio: clean(bio) ?? "",
         bio_link: normalizeUrl(bioLink) ?? "",
-      },
+      }),
       "Kit atualizado",
     );
   }

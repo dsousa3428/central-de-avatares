@@ -75,6 +75,22 @@ export function formatDateShort(iso: string | null | undefined): string {
   return shortFmt.format(parseISODate(iso)).replace(".", "");
 }
 
+const weekdayFmt = new Intl.DateTimeFormat("pt-BR", { weekday: "short" });
+const dayMonthFmt = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit" });
+
+/** "qui, 12/11" — dia da semana curto + dia e mês. */
+export function formatWeekdayDate(iso: string | null | undefined): string {
+  if (!isValidISODate(iso)) return "—";
+  const date = parseISODate(iso);
+  return `${weekdayFmt.format(date).replace(".", "")}, ${dayMonthFmt.format(date)}`;
+}
+
+/** "12/11" */
+export function formatDayMonth(iso: string | null | undefined): string {
+  if (!isValidISODate(iso)) return "—";
+  return dayMonthFmt.format(parseISODate(iso));
+}
+
 /** quinta-feira, 12 de novembro */
 export function formatDateLong(iso: string): string {
   return longFmt.format(parseISODate(iso));

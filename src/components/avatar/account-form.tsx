@@ -17,7 +17,10 @@ import {
   usageByProxy,
   type Usage,
 } from "@/lib/selectors";
+import { afterStatusChange } from "@/lib/account-actions";
 import { insertRow, logActivity, updateRow, useStore, type Db } from "@/lib/store";
+import { describePlan, planFromSettings } from "@/lib/warmup";
+import { startWarmup } from "@/lib/warmup-actions";
 import type { Account, AccountStatus, Avatar, RowPatch } from "@/lib/types";
 import { invalid } from "@/components/common/validation";
 import { PhoneForm } from "@/components/infra/phone-form";
@@ -99,6 +102,8 @@ export function AccountForm({ avatar, account, initialStatus, onClose, onSaved }
   const [fellOn, setFellOn] = useState(account?.fell_on ?? todayISO());
   const [fallReason, setFallReason] = useState(account?.fall_reason ?? "");
   const [creating, setCreating] = useState<"phone" | "profile" | null>(null);
+  const [withWarmup, setWithWarmup] = useState(true);
+  const warmupPlan = planFromSettings(db.settings);
 
   const phoneUsage = useMemo(() => usageByPhone(db), [db]);
   const profileUsage = useMemo(() => usageByProfile(db), [db]);
@@ -175,6 +180,14 @@ export function AccountForm({ avatar, account, initialStatus, onClose, onSaved }
       if (fallen) {
         await logActivity({ avatar_id: avatar.id, account_id: row.id, kind: "caiu", message: fallMessage });
       }
+      if (status === "aquecendo" && withWarmup) {
+        try {
+          await startWarmup(row, createdOn, warmupPlan);
+        } catch (err) {
+          // a conta foi criada; o calendário pode ser iniciado depois, na aba Aquecimento
+          toast.error(err);
+        }
+      }
       toast.success("Conta criada");
       onSaved?.(row);
       return;
@@ -191,17 +204,7 @@ export function AccountForm({ avatar, account, initialStatus, onClose, onSaved }
     if (Object.keys(patch).length === 0) return;
 
     await updateRow("accounts", account.id, patch);
-    if (patch.status) {
-      await logActivity({
-        avatar_id: avatar.id,
-        account_id: account.id,
-        kind: fallen ? "caiu" : "status_alterado",
-        message: fallen
-          ? fallMessage
-          : `Status: ${ACCOUNT_STATUS[account.status].label} → ${ACCOUNT_STATUS[status].label}`,
-        is_example: account.is_example,
-      });
-    }
+    if (patch.status) await afterStatusChange(account, account.status, status, values.fall_reason);
     toast.success("Conta atualizada");
   }
 
@@ -359,6 +362,23 @@ export function AccountForm({ avatar, account, initialStatus, onClose, onSaved }
         <Field label="Anotações" optional>
           <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
         </Field>
+
+        {!account && status === "aquecendo" ? (
+          <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-line bg-surface-2/60 p-3.5">
+            <input
+              type="checkbox"
+              checked={withWarmup}
+              onChange={(e) => setWithWarmup(e.target.checked)}
+              className="mt-0.5 size-5 shrink-0 accent-[var(--primary)]"
+            />
+            <span className="text-sm leading-relaxed">
+              <span className="font-medium">Criar o calendário de aquecimento</span>
+              <span className="block text-muted">
+                {describePlan(warmupPlan)}, começando na data de criação. Você ajusta depois, dia a dia.
+              </span>
+            </span>
+          </label>
+        ) : null}
 
         <p className="text-xs leading-relaxed text-muted">
           Senhas e códigos de backup entram na etapa do cofre (criptografados com a sua senha-mestra).

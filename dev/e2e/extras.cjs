@@ -15,7 +15,7 @@ const restoreTable = () => {
 (async () => {
   resetData(); // começa do zero: o primeiro login recria os exemplos
   const session = await openPhone(chromium);
-  const { page, dialog, shot, toast, save, clipboard } = session;
+  const { page, dialog, shot, toast, save, clipboard, more } = session;
 
   // ---------------------------------------------------------------
   section("Banco sem as tabelas: tela de ajuda + botão de copiar o script");
@@ -40,7 +40,7 @@ const restoreTable = () => {
   }
   await page.waitForTimeout(1500);
   await page.getByRole("button", { name: "Já rodei" }).click();
-  await page.getByRole("heading", { name: "Hoje" }).waitFor({ timeout: 30000 });
+  await page.getByRole("heading", { name: "Hoje", exact: true }).waitFor({ timeout: 30000 });
   ok("com o banco preparado, “Já rodei” abre o painel");
 
   // ---------------------------------------------------------------
@@ -83,7 +83,7 @@ const restoreTable = () => {
   );
   await page.reload();
   await page.getByRole("heading", { name: "Fra' Salvio" }).waitFor({ timeout: 20000 });
-  await page.getByRole("link", { name: "Config" }).click();
+  await more("Configurações");
   await page.getByRole("heading", { name: "Configurações" }).waitFor();
   await page.getByRole("button", { name: "Apagar exemplos" }).click();
   await dialog().getByRole("button", { name: "Apagar exemplos" }).click();
@@ -126,13 +126,13 @@ const restoreTable = () => {
   await toast("Fra' Salvio agora é seu");
   assert(
     psql(
-      "select (select count(*) from public.avatars where is_example) + (select count(*) from public.accounts where is_example) + (select count(*) from public.countries where is_example) + (select count(*) from public.phones where is_example) + (select count(*) from public.antidetect_profiles where is_example) + (select count(*) from public.activity_log where is_example)",
+      "select (select count(*) from public.avatars where is_example) + (select count(*) from public.accounts where is_example) + (select count(*) from public.countries where is_example) + (select count(*) from public.phones where is_example) + (select count(*) from public.antidetect_profiles where is_example) + (select count(*) from public.activity_log where is_example) + (select count(*) from public.warmups where is_example)",
     ) === "0",
-    "avatar, contas, país, celulares, perfis e histórico deixaram de ser exemplo",
+    "avatar, contas, aquecimento, país, celulares, perfis e histórico deixaram de ser exemplo",
   );
   assert(psql("select count(*) from public.accounts") === "2", "nenhuma conta foi apagada ou criada");
   assert((await page.getByRole("button", { name: "Ficar com este avatar" }).count()) === 0, "o aviso de exemplo some da página");
-  await page.getByRole("link", { name: "Config" }).click();
+  await more("Configurações");
   await page.getByText("Não há dados de exemplo no painel.").waitFor();
   ok("Configurações passa a dizer que não há exemplos");
   resetData(); // deixa o banco limpo para a próxima rodada

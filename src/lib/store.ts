@@ -7,7 +7,7 @@
 import { useSyncExternalStore } from "react";
 import { getSupabase } from "./supabase";
 import { AppError, toAppError } from "./errors";
-import { EXAMPLES_VERSION, seedExamples } from "./examples";
+import { EXAMPLES_VERSION, seedExamples, upgradeExamples } from "./examples";
 import { naturalCompare } from "./format";
 import type {
   Account,
@@ -223,6 +223,20 @@ async function runLoad(userId: string, background: boolean): Promise<boolean> {
       db = await fetchEverything();
     }
 
+    // O painel ganhou dados de exemplo novos desde a última visita: completa os exemplos existentes.
+    const examplesVersion = db.settings?.prefs?.examples_version ?? 0;
+    if (!background && db.settings && examplesVersion < EXAMPLES_VERSION) {
+      const changed = await upgradeExamples(db, examplesVersion);
+      const { error } = await getSupabase()
+        .from("settings")
+        .update({ prefs: { ...db.settings.prefs, examples_version: EXAMPLES_VERSION } })
+        .eq("user_id", userId);
+      if (error) throw toAppError(error);
+      db = changed
+        ? await fetchEverything()
+        : { ...db, settings: { ...db.settings, prefs: { ...db.settings.prefs, examples_version: EXAMPLES_VERSION } } };
+    }
+
     if (state.userId !== userId) return false; // saiu ou trocou de usuário no meio
     // não atropela uma gravação feita enquanto esta leitura estava a caminho
     if (background && (pendingWrites > 0 || writeSeq !== seqAtStart)) return false;
@@ -339,12 +353,15 @@ export interface UpdateOptions {
 const STALE_MESSAGE =
   "Este item foi alterado em outro aparelho. Já atualizei os dados aqui — confira e tente de novo.";
 
+/** Calcula os campos a gravar a partir da linha; null = nada a mudar. */
+type ApplyChange = (row: Record<string, unknown>) => Record<string, unknown> | null;
+
 /** Gravações em andamento de uma mesma linha (feitas em fila, uma de cada vez). */
 interface RowTxn {
   /** Último estado que sabemos estar gravado no servidor. */
   confirmed: Record<string, unknown>;
   /** Mudanças otimistas ainda sem resposta, na ordem em que foram feitas. */
-  optimistic: Array<Record<string, unknown>>;
+  optimistic: ApplyChange[];
   /** Quantas gravações desta linha ainda não terminaram. */
   pending: number;
   /** A linha mudou em outro aparelho: as gravações que estavam na fila são canceladas. */
@@ -355,10 +372,13 @@ interface RowTxn {
 
 const rowTxns = new Map<string, RowTxn>();
 
-/** Tela = último estado confirmado + mudanças otimistas que ainda aguardam resposta. */
+/** Tela = último estado confirmado + mudanças otimistas que ainda aguardam resposta, reaplicadas em ordem. */
 function showRow<T extends TableName>(table: T, id: string, txn: RowTxn) {
   let row = txn.confirmed;
-  for (const patch of txn.optimistic) row = { ...row, ...patch };
+  for (const apply of txn.optimistic) {
+    const patch = apply(row);
+    if (patch) row = { ...row, ...patch };
+  }
   patchLocal(table, id, row as Partial<Tables[T]>);
 }
 
@@ -392,6 +412,18 @@ async function writeRow(
 }
 
 /**
+ * A mudança pode ser um objeto pronto ou uma função que a calcula a partir da
+ * linha. Use a função sempre que o valor novo depender do antigo (listas
+ * inteiras, calendário): ela recebe a linha como está de fato — nunca a cópia
+ * velha de uma tela que ficou aberta — e, se houver outras gravações da mesma
+ * linha na fila, é calculada de novo depois que elas terminam. Assim nenhuma
+ * regrava por cima da outra.
+ * Se a função devolver null, nada é gravado. Ela pode ser chamada mais de uma
+ * vez: deve só calcular a mudança, sem outros efeitos.
+ */
+export type RowChange<T extends TableName> = RowPatch<T> | ((current: Tables[T]) => RowPatch<T> | null);
+
+/**
  * Atualiza um registro. Por padrão a tela só muda quando o servidor confirma.
  * Com `optimistic: true` a tela muda na hora e, se o servidor recusar, volta
  * para o último estado confirmado. Em qualquer caso o erro é devolvido para
@@ -400,7 +432,7 @@ async function writeRow(
 export function updateRow<T extends TableName>(
   table: T,
   id: string,
-  patch: RowPatch<T>,
+  change: RowChange<T>,
   options: UpdateOptions = {},
 ): Promise<void> {
   const current = listOf(table).find((row) => row.id === id);
@@ -409,6 +441,12 @@ export function updateRow<T extends TableName>(
       new AppError("unknown", "Este registro não foi encontrado. Atualize a página e tente de novo."),
     );
   }
+  const apply: ApplyChange =
+    typeof change === "function"
+      ? (row) => change(row as unknown as Tables[T]) as Record<string, unknown> | null
+      : () => change as Record<string, unknown>;
+  // nada a mudar no que está na tela agora: nem entra na fila
+  if (!apply(current as unknown as Record<string, unknown>)) return Promise.resolve();
 
   const key = `${table}:${id}`;
   let txn = rowTxns.get(key);
@@ -423,12 +461,11 @@ export function updateRow<T extends TableName>(
     rowTxns.set(key, txn);
   }
   const t = txn;
-  const values = patch as Record<string, unknown>;
   const previous = t.chain;
 
   t.pending += 1;
   if (options.optimistic) {
-    t.optimistic.push(values);
+    t.optimistic.push(apply);
     showRow(table, id, t);
   }
 
@@ -436,9 +473,12 @@ export function updateRow<T extends TableName>(
     await previous; // espera a gravação anterior desta mesma linha
     try {
       if (t.stale) throw new AppError("conflict", STALE_MESSAGE);
-      t.confirmed = await writeRow(table, id, values, t);
+      // As gravações anteriores desta linha já terminaram: a mudança é calculada em cima do
+      // que está gravado de fato, e não do que a tela mostrava quando o botão foi tocado.
+      const values = apply(t.confirmed);
+      if (values) t.confirmed = await writeRow(table, id, values, t);
     } finally {
-      const index = t.optimistic.indexOf(values);
+      const index = t.optimistic.indexOf(apply);
       if (index >= 0) t.optimistic.splice(index, 1);
       t.pending -= 1;
       if (t.pending === 0 && rowTxns.get(key) === t) rowTxns.delete(key);

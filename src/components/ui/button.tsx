@@ -26,7 +26,7 @@ const ICON_SIZES: Record<Size, string> = {
 };
 
 const BASE =
-  "inline-flex shrink-0 select-none items-center justify-center font-medium transition-colors " +
+  "inline-flex shrink-0 select-none items-center justify-center whitespace-nowrap font-medium transition-colors " +
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring " +
   "disabled:pointer-events-none disabled:opacity-50 [&_svg]:shrink-0";
 

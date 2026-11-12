@@ -3,10 +3,21 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ChevronRight, Clock, Coins, Globe, Languages, Pencil, Plus, Tags, UserRound } from "lucide-react";
-import { timeInZone } from "@/lib/dates";
+import { formatDayMonth, timeInZone } from "@/lib/dates";
 import { copyText } from "@/lib/clipboard";
 import { formatNumber } from "@/lib/format";
-import { accountsOf, currentAccount, generationLabel, latestAccount, phoneLabel, profileShortLabel } from "@/lib/selectors";
+import {
+  accountsOf,
+  currentAccount,
+  generationLabel,
+  isWarmupRunning,
+  latestAccount,
+  phoneLabel,
+  profileShortLabel,
+  warmupOf,
+} from "@/lib/selectors";
+import { warmupInfo, warmupShortLabel } from "@/lib/warmup";
+import { WarmupBar } from "@/components/warmup/warmup-bar";
 import { useStore, type Db } from "@/lib/store";
 import type { Avatar, Country } from "@/lib/types";
 import { setSelectedCountry, useSelectedCountry } from "@/lib/ui-state";
@@ -230,6 +241,8 @@ function AvatarCard({ db, avatar }: { db: Db; avatar: Avatar }) {
   const last = latestAccount(accounts);
   const phone = account ? db.phones.find((p) => p.id === account.phone_id) : undefined;
   const profile = account ? db.profiles.find((p) => p.id === account.profile_id) : undefined;
+  const warmupRow = account ? warmupOf(db, account.id) : undefined;
+  const warmup = account && warmupRow && isWarmupRunning(account, warmupRow) ? warmupInfo(warmupRow) : null;
   const details = account
     ? [
         account.followers !== null ? `${formatNumber(account.followers)} seguidores` : null,
@@ -265,6 +278,15 @@ function AvatarCard({ db, avatar }: { db: Db; avatar: Avatar }) {
               <span className="text-sm text-muted">{generationLabel(account.generation)}</span>
             </div>
             {details.length > 0 ? <p className="mt-1 text-sm text-muted">{details.join(" · ")}</p> : null}
+            {warmup ? (
+              <div className="mt-2.5">
+                <div className="mb-1 flex items-baseline justify-between gap-3 text-xs text-muted">
+                  <span>Aquecimento · {warmupShortLabel(warmup)}</span>
+                  <span className="shrink-0">fim em {formatDayMonth(warmup.endDate)}</span>
+                </div>
+                <WarmupBar info={warmup} />
+              </div>
+            ) : null}
           </>
         ) : (
           <>

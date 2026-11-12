@@ -33,12 +33,12 @@ export function LinksTab({ avatar }: { avatar: Avatar }) {
   const extras = avatar.extra_links ?? [];
 
   async function saveExtra(item: LabeledLink) {
-    await updateRow("avatars", avatar.id, { extra_links: upsertById(extras, item) });
+    await updateRow("avatars", avatar.id, (row) => ({ extra_links: upsertById(row.extra_links, item) }));
     toast.success("Link salvo");
   }
 
   async function deleteExtra(id: string) {
-    await updateRow("avatars", avatar.id, { extra_links: removeById(extras, id) });
+    await updateRow("avatars", avatar.id, (row) => ({ extra_links: removeById(row.extra_links, id) }));
     toast.success("Link apagado");
   }
 

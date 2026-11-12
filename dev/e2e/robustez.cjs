@@ -96,8 +96,8 @@ const REST = "**/rest/v1/**";
   section("A aba aberta segue o endereço");
   await page.getByRole("tab", { name: /^Kit de reposição/ }).click();
   await page.getByRole("link", { name: "Hoje" }).click();
-  await page.getByRole("heading", { name: "Hoje" }).waitFor();
-  await page.getByRole("link", { name: /Fra' Salvio/ }).click(); // este link leva para a aba "Conta atual"
+  await page.getByRole("heading", { name: "Hoje", exact: true }).waitFor();
+  await page.getByRole("link", { name: /Fra' Salvio.*2ª geração/ }).click(); // a linha de "Contas em operação" leva para a aba "Conta atual"
   await page.getByRole("heading", { name: "@fra.salvio" }).waitFor();
   assert(
     (await page.getByRole("tab", { name: /^Conta atual/ }).getAttribute("aria-selected")) === "true",
@@ -193,7 +193,7 @@ const REST = "**/rest/v1/**";
   await page.getByLabel("E-mail").fill(USER.email);
   await page.getByLabel("Senha", { exact: true }).fill(USER.password);
   await page.getByRole("button", { name: "Entrar" }).click();
-  await page.getByRole("heading", { name: "Hoje" }).waitFor({ timeout: 30000 });
+  await page.getByRole("heading", { name: "Hoje", exact: true }).waitFor({ timeout: 30000 });
   ok("dá para entrar de novo normalmente");
 
   resetData();

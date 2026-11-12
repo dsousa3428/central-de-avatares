@@ -1,6 +1,6 @@
 # Central de Avatares
 
-Painel **privado**, de um único usuário, para organizar contas de Instagram de avatares de IA em vários países: países, avatares, contas (gerações), celulares, perfis do navegador anti-detect, links, kit de reposição e, nas próximas etapas, aquecimento, vendas e cofre de senhas.
+Painel **privado**, de um único usuário, para organizar contas de Instagram de avatares de IA em vários países: países, avatares, contas (gerações), aquecimento com tarefas do dia, celulares, perfis do navegador anti-detect, links, kit de reposição, uma visão em planilha de tudo e, nas próximas etapas, cofre de senhas e vendas.
 
 > O painel é só de organização. Ele **não acessa o Instagram**, não automatiza nada e não faz login em conta nenhuma.
 
@@ -9,7 +9,8 @@ Painel **privado**, de um único usuário, para organizar contas de Instagram de
 | Etapa | O que entra | Situação |
 |---|---|---|
 | **a** | Base do app, login, países, avatares, contas, infraestrutura, exemplos | ✅ pronta |
-| **b** | Aquecimento (calendário por conta) + tela Hoje com as tarefas do dia | a fazer |
+| **b** | Aquecimento (calendário por conta) + tela Hoje com as tarefas do dia | ✅ pronta |
+| **+** | Planilha: tudo em tabela, com edição nas células, filtros e exportação | ✅ pronta |
 | **c** | Cofre de senhas (criptografia no aparelho, com senha-mestra) | a fazer |
 | **d** | Vendas semanais, totais, gráfico, ranking, conversão para BRL | a fazer |
 | **e** | Botão "Conta caiu" + assistente de reposição + avisos automáticos | a fazer |
@@ -117,14 +118,16 @@ Daqui para frente, toda atualização enviada ao GitHub é publicada sozinha pel
 
 ---
 
-## Como usar (etapa a)
+## Como usar
 
-- **Hoje** — resumo das contas por situação, a conta atual de cada avatar e os avatares que ficaram sem conta. A lista de tarefas do dia chega na etapa (b).
-- **Países** — uma aba por país. No topo ficam as tags de aquecimento (toque numa tag para copiar, ou em *Copiar todas*). Abaixo, os avatares do país.
-- **Avatar** — toque em um avatar para abrir a página dele, com as seções: Visão geral · Conta atual · Links · Vídeos para modelar · Perfis de exemplo · Kit de reposição · Histórico · Anotações.
+- **Hoje** — o que fazer no dia: quais contas em aquecimento usar, por quantos minutos, em qual celular e em qual perfil do anti-detect, com o botão **Feito**. Mostra também os dias atrasados, as contas que hoje descansam, os aquecimentos que terminam em breve e as contas prontas para operar.
+- **Países** — uma aba por país. No topo ficam as tags de aquecimento (toque numa tag para copiar, ou em *Copiar todas*). Abaixo, os avatares do país, com a barra de progresso do aquecimento.
+- **Avatar** — toque em um avatar para abrir a página dele, com as seções: Visão geral · Conta atual · Aquecimento · Links · Vídeos para modelar · Perfis de exemplo · Kit de reposição · Histórico · Anotações.
 - **Contas** — cada conta é uma *geração* do avatar. Quando uma cai, mude o status para **Caída** (o painel pede data e motivo) e crie a próxima geração: o @ já vem preenchido.
-- **Infraestrutura** — celulares e perfis do anti-detect, mostrando qual conta está em cada um, quais estão livres e quais já foram usados por conta que caiu.
-- **Configurações** — tema claro/escuro, apagar (ou recriar) os dados de exemplo e sair.
+- **Aquecimento** — toda conta nova nasce com um calendário (padrão: 10 dias, usa nos dias 1, 3, 5, 7 e 9 e descansa nos pares). Dá para ajustar cada dia (minutos, o que fazer, uso ou descanso), a data de início e a duração. A data de fim é calculada sozinha. Se um dia de uso passar sem marcar, o painel pergunta: **Fiz no dia** ou **Não fiz: empurrar para hoje** — e recalcula o fim. Quando a conta sai do status *Aquecendo*, o calendário é encerrado; se ela voltar para *Aquecendo*, ele continua de onde parou. O padrão para contas novas fica em Configurações.
+- **Planilha** — os mesmos dados em formato de tabela (Contas, Avatares, Celulares e Perfis). Toque no título de uma coluna para ordenar, use os filtros e a busca, e edite direto nas células das colunas marcadas com um lápis. **Copiar** leva a tabela para colar no Excel ou no Google Planilhas; **Baixar** gera um arquivo CSV.
+- **Infraestrutura** — celulares e perfis do anti-detect, mostrando qual conta está em cada um, quais estão livres e quais já foram usados por conta que caiu. No celular fica no botão **Mais**.
+- **Configurações** — tema claro/escuro, padrão de aquecimento, apagar (ou recriar) os dados de exemplo e sair. No celular fica no botão **Mais**.
 - **Exemplos** — Itália e Fra' Salvio vêm com dados fictícios. Se quiser aproveitar um exemplo como dado seu, abra o avatar (ou o país) e toque em **Ficar com este avatar / país**: ele deixa de ser exemplo e não é mais apagado em "Apagar exemplos".
 
 O painel avisa quando você escolhe um celular, perfil ou proxy que já está em uso por outra conta, ou que foi usado por uma conta que caiu.

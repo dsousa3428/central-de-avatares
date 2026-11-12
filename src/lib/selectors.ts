@@ -2,7 +2,8 @@
 
 import { daysBetween, todayISO } from "./dates";
 import type { Db } from "./store";
-import type { Account, AntidetectProfile, Avatar, Phone } from "./types";
+import type { Account, AntidetectProfile, Avatar, Country, Phone, Warmup } from "./types";
+import { warmupInfo, type WarmupInfo } from "./warmup";
 
 /** Conta "viva" = qualquer status que não seja caída. */
 export function isLive(account: Account): boolean {
@@ -118,4 +119,55 @@ export function usageByProxy(db: Pick<Db, "accounts">): Map<string, Usage> {
 export function avatarsWithoutLiveAccount(db: Pick<Db, "avatars" | "accounts">): Avatar[] {
   const withLive = new Set(db.accounts.filter(isLive).map((a) => a.avatar_id));
   return db.avatars.filter((avatar) => avatar.status === "ativo" && !withLive.has(avatar.id));
+}
+
+/** Calendário de aquecimento de uma conta, se existir. */
+export function warmupOf(db: Pick<Db, "warmups">, accountId: string): Warmup | undefined {
+  return db.warmups.find((w) => w.account_id === accountId);
+}
+
+/** Aquecimento em andamento: a conta está "aquecendo" e o calendário ainda não foi encerrado. */
+export function isWarmupRunning(account: Account, warmup: Warmup | undefined): boolean {
+  return Boolean(warmup) && account.status === "aquecendo" && !warmup?.finished_at;
+}
+
+/** Tudo que as telas precisam saber sobre um aquecimento em andamento. */
+export interface RunningWarmup {
+  warmup: Warmup;
+  account: Account;
+  avatar: Avatar;
+  country: Country | undefined;
+  phone: Phone | undefined;
+  profile: AntidetectProfile | undefined;
+  info: WarmupInfo;
+}
+
+/** Todos os aquecimentos em andamento, com a situação de cada um na data de hoje. */
+export function runningWarmups(db: Db, today = todayISO()): RunningWarmup[] {
+  const list: RunningWarmup[] = [];
+  for (const warmup of db.warmups) {
+    const account = db.accounts.find((a) => a.id === warmup.account_id);
+    if (!account || !isWarmupRunning(account, warmup)) continue;
+    const avatar = db.avatars.find((a) => a.id === account.avatar_id);
+    if (!avatar) continue;
+    list.push({
+      warmup,
+      account,
+      avatar,
+      country: db.countries.find((c) => c.id === avatar.country_id),
+      phone: db.phones.find((p) => p.id === account.phone_id),
+      profile: db.profiles.find((p) => p.id === account.profile_id),
+      info: warmupInfo(warmup, today),
+    });
+  }
+  return list.sort((a, b) => a.avatar.name.localeCompare(b.avatar.name, "pt-BR"));
+}
+
+/**
+ * Contas "aquecendo" sem calendário em andamento: ou nunca tiveram um, ou o
+ * calendário foi encerrado (ex.: a conta saiu de "aquecendo" e depois voltou).
+ */
+export function warmingWithoutPlan(db: Db): Account[] {
+  const running = new Set(db.warmups.filter((w) => !w.finished_at).map((w) => w.account_id));
+  return db.accounts.filter((a) => a.status === "aquecendo" && !running.has(a.id));
 }

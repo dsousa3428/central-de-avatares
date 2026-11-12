@@ -97,7 +97,7 @@ export function Segmented<T extends string>({ items, value, onChange, ariaLabel,
             aria-checked={active}
             onClick={() => onChange(item.value)}
             className={cn(
-              "inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors",
+              "inline-flex h-9 flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-2 text-sm font-medium transition-colors",
               "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
               active ? "bg-surface text-fg shadow-card" : "text-muted hover:text-fg",
             )}

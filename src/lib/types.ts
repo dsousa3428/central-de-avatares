@@ -159,6 +159,7 @@ export type ActivityKind =
   | "status_alterado"
   | "caiu"
   | "aquecimento_iniciado"
+  | "aquecimento_empurrado"
   | "aquecimento_concluido"
   | "nota";
 

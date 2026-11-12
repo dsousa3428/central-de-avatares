@@ -18,9 +18,14 @@ import type {
   ReferenceProfile,
 } from "./types";
 import type { Db } from "./store";
+import { buildDays, DEFAULT_WARMUP_PLAN } from "./warmup";
 
-/** Aumente quando os exemplos ganharem dados novos (ex.: aquecimento, vendas). */
-export const EXAMPLES_VERSION = 1;
+/**
+ * Aumente quando os exemplos ganharem dados novos.
+ *  1 = país, avatar, contas, celulares e perfis
+ *  2 = + calendário de aquecimento da conta de exemplo que está aquecendo
+ */
+export const EXAMPLES_VERSION = 2;
 
 async function insertOne<T>(table: string, values: Record<string, unknown>): Promise<T> {
   const { data, error } = await getSupabase().from(table).insert(values).select().single();
@@ -196,6 +201,8 @@ export async function seedExamples(): Promise<void> {
 
   const at = (isoDate: string, hour: number) => new Date(`${isoDate}T${String(hour).padStart(2, "0")}:00:00`).toISOString();
 
+  await insertOne("warmups", exampleWarmup(gen2.id, gen2Created, today));
+
   const { error } = await getSupabase()
     .from("activity_log")
     .insert([
@@ -233,6 +240,52 @@ export async function seedExamples(): Promise<void> {
       },
     ]);
   if (error) throw toAppError(error);
+}
+
+/**
+ * Aquecimento de exemplo: começou na data de criação da conta, com os dias de
+ * uso anteriores a hoje já marcados como feitos — assim a tela Hoje mostra uma
+ * tarefa de verdade para testar.
+ */
+function exampleWarmup(accountId: string, startDate: string, today: string): Record<string, unknown> {
+  const days = buildDays(startDate, DEFAULT_WARMUP_PLAN).map((day) => {
+    const done = day.use && day.date < today;
+    return {
+      ...day,
+      task: day.date === today && day.use ? "Texto de exemplo: anote aqui o que fazer na conta neste dia." : "",
+      done,
+      done_at: done ? new Date(`${day.date}T18:00:00`).toISOString() : null,
+    };
+  });
+  return {
+    is_example: true,
+    account_id: accountId,
+    start_date: startDate,
+    total_days: days.length,
+    days,
+  };
+}
+
+/**
+ * Completa exemplos criados por uma versão anterior do painel (só mexe em
+ * linhas marcadas como exemplo). Devolve true se criou alguma coisa.
+ */
+export async function upgradeExamples(db: Db, fromVersion: number): Promise<boolean> {
+  let changed = false;
+  if (fromVersion < 2) {
+    const today = todayISO();
+    const withWarmup = new Set(db.warmups.map((w) => w.account_id));
+    for (const account of db.accounts) {
+      if (!account.is_example || account.status !== "aquecendo" || withWarmup.has(account.id)) continue;
+      // Começa no máximo 4 dias atrás: assim hoje cai num dia de uso e há uma tarefa para testar,
+      // mesmo que o exemplo tenha sido criado há muito tempo.
+      const recent = addDays(today, -4);
+      const start = account.created_on > recent ? account.created_on : recent;
+      await insertOne("warmups", exampleWarmup(account.id, start, today));
+      changed = true;
+    }
+  }
+  return changed;
 }
 
 export interface ExampleCounts {
