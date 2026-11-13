@@ -319,8 +319,15 @@ const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const totalText = "€ " + Number(total).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
   await page.getByText(totalText, { exact: true }).first().waitFor();
   ok(`total somando todas as contas (${totalText})`);
+  // (Nos exemplos, a 2ª geração nasce 4 dias antes de hoje: só de segunda a quinta isso cai na semana passada e
+  //  alguma venda fica ligada a ela. Para a conferência valer em qualquer dia da semana, uma venda antiga é
+  //  ligada à 2ª geração aqui.)
+  psql(`update public.weekly_sales set account_id = (select id from public.accounts where generation = 2) where week_start = ${monday(3)}`);
+  await page.reload();
+  await page.getByRole("heading", { name: "Lançamentos por semana" }).waitFor({ timeout: 30000 });
   await page.getByText("1ª geração").first().waitFor();
   await page.getByText("2ª geração").first().waitFor();
+  ok("cada lançamento mostra a conta (geração) que estava no ar");
   const before = psql("select count(*) from public.weekly_sales");
   await page.getByRole("button", { name: "Lançar venda" }).click();
   await dialog().getByRole("button", { name: "Semana anterior" }).click();

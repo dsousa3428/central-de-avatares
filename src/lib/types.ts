@@ -59,6 +59,33 @@ export interface ReferenceProfile {
   note: string;
 }
 
+/** As etapas do funil de um avatar modelo (ver src/lib/funnels.ts). */
+export type FunnelStepKind = "pagina_vendas" | "captura" | "isca" | "venda" | "email" | "outro";
+
+export interface FunnelStep {
+  id: string;
+  kind: FunnelStepKind;
+  /** Título da página, nome do material, produto, assunto do e-mail… */
+  title: string;
+  url: string;
+  notes: string;
+  /** Venda: o preço. E-mail: quando chegou. Nas outras etapas fica vazio. */
+  detail: string;
+  /** Já modelei esta etapa para o meu avatar. */
+  done: boolean;
+}
+
+/** Um avatar de outra pessoa que serve de modelo, com o funil dele registrado etapa por etapa. */
+export interface FunnelModel {
+  id: string;
+  name: string;
+  /** @ ou link do perfil (só para copiar ou abrir; o painel não acessa o Instagram). */
+  handle: string;
+  niche: string;
+  notes: string;
+  steps: FunnelStep[];
+}
+
 export interface KitHighlight {
   id: string;
   title: string;
@@ -78,6 +105,12 @@ export interface ReplacementKit {
    * src/lib/structure.ts.
    */
   structure?: Partial<Record<string, boolean>>;
+  /**
+   * Funis de outros avatares para modelar (aba "Funis para modelar"). Fica aqui
+   * pelo mesmo motivo de `structure`: sem coluna nova no banco. Leia sempre com
+   * `readFunnels` (src/lib/funnels.ts) — o que está guardado pode vir incompleto.
+   */
+  funnels?: FunnelModel[];
 }
 
 export interface Avatar extends BaseRow {

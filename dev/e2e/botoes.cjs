@@ -108,12 +108,45 @@ async function scanWidth(WIDTH) {
   await close();
   await p.getByRole('link', { name: /Fra' Salvio/ }).click();
   await p.getByRole('heading', { name: "Fra' Salvio" }).waitFor();
-  for (const tab of ['Visão geral', 'Conta atual', 'Aquecimento', 'Links', 'Vídeos', 'Perfis de exemplo', 'Kit', 'Histórico', 'Anotações']) {
+  for (const tab of ['Visão geral', 'Conta atual', 'Aquecimento', 'Links', 'Vídeos', 'Perfis de exemplo', 'Funis para modelar', 'Kit', 'Histórico', 'Anotações']) {
     const t = p.getByRole('tab', { name: new RegExp('^' + tab) });
     if (!(await t.count())) { console.log('  (aba não encontrada: ' + tab + ')'); continue; }
     await t.first().click();
     await scan('avatar · ' + tab);
   }
+  // Funis para modelar: um modelo com etapas (texto comprido, etapas que ainda faltam) e mais um avatar,
+  // para o botão "Copiar para outro avatar" aparecer
+  const funnel = [{ id: 'm1', name: 'Padre Antonio', handle: '@padre.antonio.ricette', niche: 'Receitas de convento', notes: 'Funil direto.', steps: [
+    { id: 's1', kind: 'pagina_vendas', title: 'A dieta dos monges em 21 dias', url: 'https://exemplo.com/dieta', notes: 'Promessa no topo.\nProva social.\nTrês bônus.\nGarantia.\nPerguntas frequentes.\nBotão no fim.\nRodapé simples.', detail: '', done: true },
+    { id: 's2', kind: 'outro', title: 'Página de obrigado', url: '', notes: 'Pede para conferir o e-mail.', detail: '', done: false },
+  ] }];
+  psql(`update public.avatars set kit = jsonb_set(kit, '{funnels}', '${JSON.stringify(funnel)}'::jsonb) where name = 'Fra'' Salvio'`);
+  psql(`insert into public.avatars (user_id, country_id, name, status, position) select user_id, country_id, 'Avatar de apoio', 'pausado', 9 from public.avatars where name = 'Fra'' Salvio'`);
+  await p.reload();
+  await p.getByRole('heading', { name: "Fra' Salvio" }).waitFor({ timeout: 30000 });
+  await p.getByRole('tab', { name: /^Funis para modelar/ }).click();
+  await p.getByRole('button', { name: 'Adicionar etapa' }).waitFor();
+  await scan('avatar · Funis para modelar (com um funil)');
+  await p.screenshot({ path: OUT + `${WIDTH}-funis.png`, fullPage: true });
+  await p.getByRole('button', { name: 'Adicionar', exact: true }).click();
+  await scan('novo modelo'); await close();
+  await p.getByRole('button', { name: 'Editar o modelo Padre Antonio' }).click();
+  await scan('editar modelo (com Apagar e Copiar)');
+  await dialog().getByRole('button', { name: 'Copiar para outro avatar' }).click();
+  await dialog().getByRole('heading', { name: 'Copiar para outro avatar' }).waitFor();
+  await scan('copiar funil para outro avatar');
+  await dialog().getByRole('button', { name: 'Cancelar' }).click();
+  await p.getByRole('heading', { name: 'Copiar para outro avatar' }).waitFor({ state: 'detached' });
+  await close();
+  await p.getByRole('button', { name: 'Adicionar etapa' }).click();
+  await scan('nova etapa'); await close();
+  await p.getByRole('button', { name: /^Editar a etapa 1/ }).click();
+  await scan('editar etapa (com Apagar)');
+  await p.screenshot({ path: OUT + `${WIDTH}-etapa.png` });
+  await close();
+  psql("delete from public.avatars where name = 'Avatar de apoio'");
+  await p.reload();
+  await p.getByRole('heading', { name: "Fra' Salvio" }).waitFor({ timeout: 30000 });
   // (a aba troca um instante depois do toque: espera o conteúdo dela antes de tocar em "Editar",
   //  senão o toque pode cair no "Editar" da aba que ainda está na tela)
   await p.getByRole('tab', { name: /^Aquecimento/ }).click();

@@ -146,7 +146,7 @@ function unzipStored(bytes) {
   assert(/^central-de-avatares-planilhas-.*\.zip$/.test(sheetsDownload.suggestedFilename()), `as planilhas baixam como ${sheetsDownload.suggestedFilename()}`);
   const files = unzipStored(readFileSync(await sheetsDownload.path()));
   assert(
-    ["LEIA-ME.txt", "paises.csv", "avatares.csv", "contas.csv", "aquecimentos.csv", "vendas.csv", "celulares.csv", "perfis-anti-detect.csv", "historico.csv"].every((name) => name in files),
+    ["LEIA-ME.txt", "paises.csv", "avatares.csv", "contas.csv", "aquecimentos.csv", "vendas.csv", "funis.csv", "celulares.csv", "perfis-anti-detect.csv", "historico.csv"].every((name) => name in files),
     "o .zip tem uma planilha por assunto e um LEIA-ME",
   );
   const contas = files["contas.csv"].replace(/^﻿/, "").split("\r\n");

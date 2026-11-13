@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeft, Pencil, Trash2, UserRoundX } from "lucide-react";
+import { readFunnels } from "@/lib/funnels";
 import { accountsOf, accountToReplace, currentAccount } from "@/lib/selectors";
 import { deleteRow, useStore } from "@/lib/store";
 import type { Avatar } from "@/lib/types";
@@ -11,6 +12,7 @@ import { setSelectedCountry } from "@/lib/ui-state";
 import { AccountForm } from "@/components/avatar/account-form";
 import { AccountTab } from "@/components/avatar/account-tab";
 import { AvatarForm } from "@/components/avatar/avatar-form";
+import { FunnelsTab } from "@/components/avatar/funnels-tab";
 import { KeepExample } from "@/components/common/keep-example";
 import { HistoryTab } from "@/components/avatar/history-tab";
 import { KitTab } from "@/components/avatar/kit-tab";
@@ -29,7 +31,7 @@ import { useConfirm } from "@/components/ui/confirm";
 import { Tabs, type TabItem } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/toast";
 
-const TAB_VALUES = ["geral", "conta", "aquecimento", "links", "videos", "perfis", "kit", "vendas", "historico", "notas"] as const;
+const TAB_VALUES = ["geral", "conta", "aquecimento", "links", "videos", "perfis", "funis", "kit", "vendas", "historico", "notas"] as const;
 type TabValue = (typeof TAB_VALUES)[number];
 
 function isTab(value: string | null): value is TabValue {
@@ -79,6 +81,7 @@ function AvatarContent({ avatar, tab }: { avatar: Avatar; tab: TabValue }) {
   const accounts = useMemo(() => accountsOf(db, avatar.id), [db, avatar.id]);
   const account = currentAccount(accounts);
   const pendingVideos = (avatar.model_videos ?? []).filter((v) => v.status === "a_modelar").length;
+  const funnels = readFunnels(avatar.kit).length;
 
   function changeTab(next: TabValue) {
     // troca a aba mudando o endereço; o Next.js avisa esta tela e ela se redesenha
@@ -116,6 +119,7 @@ function AvatarContent({ avatar, tab }: { avatar: Avatar; tab: TabValue }) {
     { value: "links", label: "Links" },
     { value: "videos", label: "Vídeos", count: pendingVideos > 0 ? pendingVideos : undefined },
     { value: "perfis", label: "Perfis de exemplo" },
+    { value: "funis", label: "Funis para modelar", count: funnels > 0 ? funnels : undefined },
     { value: "kit", label: "Kit de reposição" },
     { value: "vendas", label: "Vendas" },
     { value: "historico", label: "Histórico", count: accounts.length > 0 ? accounts.length : undefined },
@@ -172,6 +176,7 @@ function AvatarContent({ avatar, tab }: { avatar: Avatar; tab: TabValue }) {
       {tab === "links" ? <LinksTab avatar={avatar} /> : null}
       {tab === "videos" ? <VideosTab avatar={avatar} /> : null}
       {tab === "perfis" ? <ReferencesTab avatar={avatar} /> : null}
+      {tab === "funis" ? <FunnelsTab avatar={avatar} /> : null}
       {tab === "kit" ? <KitTab avatar={avatar} /> : null}
       {tab === "vendas" ? <SalesTab avatar={avatar} accounts={accounts} /> : null}
       {tab === "historico" ? <HistoryTab avatar={avatar} accounts={accounts} /> : null}

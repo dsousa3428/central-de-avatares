@@ -5,6 +5,7 @@
 // do cofre nunca entram aqui (a coluna só diz "No cofre").
 
 import { formatDate } from "./dates";
+import { kindInfo, readFunnels } from "./funnels";
 import { checklistProgress, readChecklist } from "./replacement";
 import { cleanRates, inBRL } from "./sales";
 import { generationLabel, phoneLabel, profileLabel } from "./selectors";
@@ -226,12 +227,27 @@ export function buildSheets(db: Db): Sheet[] {
     ]);
   }
 
+  // Funis para modelar: uma linha por etapa (o modelo sem etapa nenhuma ganha uma linha só com os dados dele).
+  const funnels: string[][] = [
+    ["Avatar", "País", "Modelo", "Perfil do modelo", "Nicho ou produto", "Observações", "Etapa", "Tipo", "Título", "Preço / quando chegou", "Link", "Anotações", "Modelado"],
+  ];
+  for (const avatar of db.avatars) {
+    for (const model of readFunnels(avatar.kit)) {
+      const head = [avatar.name, text(countryOf(avatar.country_id)?.name), model.name, model.handle, model.niche, model.notes];
+      if (model.steps.length === 0) funnels.push([...head, "", "", "", "", "", "", ""]);
+      model.steps.forEach((step, index) => {
+        funnels.push([...head, String(index + 1), kindInfo(step.kind).label, step.title, step.detail, step.url, step.notes, yes(step.done)]);
+      });
+    }
+  }
+
   return [
     { name: "paises", table: countries },
     { name: "avatares", table: avatars },
     { name: "contas", table: accounts },
     { name: "aquecimentos", table: warmups },
     { name: "vendas", table: sales },
+    { name: "funis", table: funnels },
     { name: "celulares", table: phones },
     { name: "perfis-anti-detect", table: profiles },
     { name: "historico", table: history },
@@ -250,6 +266,7 @@ export function sheetsReadme(exportedAt: string): string {
     "  contas.csv              todas as contas (gerações), com status, celular, perfil e proxy",
     "  aquecimentos.csv        o calendário de aquecimento de cada conta, dia a dia",
     "  vendas.csv              vendas por semana",
+    "  funis.csv               funis para modelar: cada avatar modelo e as etapas do funil dele",
     "  celulares.csv           celulares cadastrados",
     "  perfis-anti-detect.csv  perfis do navegador anti-detect",
     "  historico.csv           linha do tempo das contas",

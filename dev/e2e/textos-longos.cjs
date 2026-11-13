@@ -30,6 +30,14 @@ const S = SHOTS + '/';
   psql(`insert into public.warmups (user_id, account_id, start_date, total_days, days) values ('${uid}', '${acc}', current_date, 3, ('[{"n":1,"date":"' || current_date || '","use":true,"minutes":600,"task":"${long}${long}${long} ${long}${long}${long}","done":false,"done_at":null},{"n":2,"date":"' || (current_date + 1) || '","use":false,"minutes":0,"task":"","done":false,"done_at":null},{"n":3,"date":"' || (current_date + 2) || '","use":true,"minutes":15,"task":"","done":false,"done_at":null}]')::jsonb)`);
   // vendas com valores enormes, em moedas diferentes, e uma observação sem espaços
   psql(`insert into public.weekly_sales (user_id, avatar_id, account_id, week_start, amount, currency, sales_count, notes) values ('${uid}', '${aid}', '${acc}', date_trunc('week', current_date)::date, 987654321.99, 'CLP', 123456789, '${long}${long}${long}'), ('${uid}', '${aid}', '${acc}', date_trunc('week', current_date)::date - 7, 123456789.5, 'HUF', 7, null)`);
+  // um funil para modelar com tudo comprido: nome, perfil, nicho, observações e cada etapa
+  const funnels = [{
+    id: 'm1', name: `Modelo ${long}${long} ${long}`, handle: `https://exemplo.com/${long}${long}${long}`, niche: `${long}${long}${long}`, notes: `${long}${long}${long}${long}`,
+    steps: ['pagina_vendas', 'captura', 'isca', 'venda', 'email', 'outro'].map((kind, index) => ({
+      id: `s${index}`, kind, title: `${long}${long}${long}`, url: `https://exemplo.com/${long}${long}${long}/${long}`, notes: `${long}${long}${long}${long}\n${long} ${long}`, detail: `${long}${long}`, done: index === 0,
+    })),
+  }];
+  psql(`update public.avatars set kit = jsonb_set(kit, '{funnels}', '${JSON.stringify(funnels)}'::jsonb) where id = '${aid}'`);
   await page.reload();
   await page.getByRole('heading', { name: 'Hoje', exact: true }).waitFor({ timeout: 30000 });
   const results = [];
@@ -46,7 +54,7 @@ const S = SHOTS + '/';
   await page.getByRole('link', { name: /Dottoressa/ }).click();
   await page.getByRole('heading', { name: /Dottoressa/ }).waitFor();
   await check('avatar-geral');
-  for (const [tab, name] of [['Conta atual', 'conta'], ['Aquecimento', 'aquecimento'], ['Links', 'links'], ['Vídeos', 'videos'], ['Perfis de exemplo', 'perfis'], ['Kit de reposição', 'kit'], ['Vendas', 'avatar-vendas'], ['Histórico', 'historico'], ['Anotações', 'notas']]) {
+  for (const [tab, name] of [['Conta atual', 'conta'], ['Aquecimento', 'aquecimento'], ['Links', 'links'], ['Vídeos', 'videos'], ['Perfis de exemplo', 'perfis'], ['Funis para modelar', 'funis'], ['Kit de reposição', 'kit'], ['Vendas', 'avatar-vendas'], ['Histórico', 'historico'], ['Anotações', 'notas']]) {
     await page.getByRole('tab', { name: new RegExp('^' + tab) }).click();
     await check(name);
   }
@@ -59,6 +67,13 @@ const S = SHOTS + '/';
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => !document.querySelector('dialog[open]'));
   };
+  // os formulários do funil para modelar, com os textos compridos dentro
+  await page.getByRole('tab', { name: /^Funis para modelar/ }).click();
+  await page.getByRole('button', { name: /^Editar o modelo/ }).click();
+  await checkDialog('formulario-modelo');
+  await page.getByRole('button', { name: /^Editar a etapa 4/ }).click();
+  await checkDialog('formulario-etapa');
+  await page.getByRole('tab', { name: /^Conta atual/ }).click();
   await page.getByRole('button', { name: 'Editar', exact: true }).click();
   await checkDialog('formulario-conta');
   await page.getByRole('button', { name: 'Conta caiu', exact: true }).click();

@@ -1,8 +1,9 @@
 "use client";
 
 import { useRef } from "react";
-import { Check } from "lucide-react";
+import { Check, Filter } from "lucide-react";
 import { cn } from "@/lib/format";
+import { readFunnels } from "@/lib/funnels";
 import { updateRow } from "@/lib/store";
 import { readStructure, setStructureDone, structureProgress, type StructureKey, type StructureStep } from "@/lib/structure";
 import type { Avatar } from "@/lib/types";
@@ -15,6 +16,8 @@ interface StructureSectionProps {
   avatar: Avatar;
   /** Abre a aba de links do avatar (para cadastrar o site, o checkout, a página de entrega). */
   onEditLinks: () => void;
+  /** Abre a aba "Funis para modelar" (as referências para montar esta estrutura). */
+  onOpenFunnels: () => void;
   className?: string;
 }
 
@@ -22,13 +25,14 @@ interface StructureSectionProps {
  * Estrutura de vendas do avatar: site, entregável, checkout e automação. É o que
  * se monta enquanto a conta aquece; cada passo é marcado quando fica pronto.
  */
-export function StructureSection({ avatar, onEditLinks, className }: StructureSectionProps) {
+export function StructureSection({ avatar, onEditLinks, onOpenFunnels, className }: StructureSectionProps) {
   const toast = useToast();
   // passos com gravação em andamento: um segundo toque no mesmo passo é ignorado até a primeira terminar
   const saving = useRef(new Set<string>());
   const steps = readStructure(avatar.kit);
   const progress = structureProgress(avatar.kit);
   const percent = Math.round((progress.done / progress.total) * 100);
+  const funnels = readFunnels(avatar.kit).length;
 
   async function toggle(step: StructureStep) {
     if (saving.current.has(step.key)) return;
@@ -107,6 +111,10 @@ export function StructureSection({ avatar, onEditLinks, className }: StructureSe
           </li>
         ))}
       </ul>
+      {/* as referências para montar tudo isso ficam a um toque */}
+      <Button size="sm" variant="ghost" onClick={onOpenFunnels} className="-ml-2 mt-1 text-primary">
+        <Filter className="size-4" /> {funnels > 0 ? `Funis para modelar (${funnels})` : "Funis para modelar"}
+      </Button>
     </Section>
   );
 }

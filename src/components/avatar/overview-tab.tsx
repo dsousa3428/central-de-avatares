@@ -17,7 +17,7 @@ interface OverviewTabProps {
   country: Country | undefined;
   account: Account | null;
   onEdit: () => void;
-  onGoTo: (tab: "conta" | "links") => void;
+  onGoTo: (tab: "conta" | "links" | "funis") => void;
   onNewAccount: () => void;
 }
 
@@ -102,7 +102,12 @@ export function OverviewTab({ avatar, country, account, onEdit, onGoTo, onNewAcc
         )}
       </Section>
 
-      <StructureSection avatar={avatar} onEditLinks={() => onGoTo("links")} className="md:col-span-2" />
+      <StructureSection
+        avatar={avatar}
+        onEditLinks={() => onGoTo("links")}
+        onOpenFunnels={() => onGoTo("funis")}
+        className="md:col-span-2"
+      />
 
       <Section
         title="Links principais"
