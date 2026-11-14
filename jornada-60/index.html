@@ -2682,6 +2682,9 @@ function abrirAjustes() {
     '<p class="erro" id="a-erro" role="alert" hidden></p>' +
     '<button type="submit" class="btn primario" id="a-salvar">Salvar alterações</button></form>' +
     '<section class="secao-dlg"><h3>Backup</h3>' +
+    '<p id="a-situacao">' + ((semArmazenamento || falhaAoSalvar) ? '<b>Atenção: este navegador não está conseguindo guardar os dados.</b> Faça um backup agora.'
+      : estado.salvamentoConferido ? 'Este navegador está guardando o seu progresso (conferido ao reabrir o app).'
+        : 'O progresso está sendo gravado neste navegador. Para conferir, feche e abra o app uma vez.') + '</p>' +
     '<p>' + (b.ultimoEm ? 'Último backup: <b>' + esc(dataBR(b.ultimoEm)) + '</b>.' : 'Você ainda não fez backup.') +
     ' Os dados ficam só neste navegador: se ele for limpo ou você trocar de aparelho, é o backup que traz tudo de volta.</p>' +
     '<div class="dlg-acoes"><button type="button" class="btn secundario" id="a-exportar" data-acao="exportar">' + IC.baixar + 'Baixar backup</button>' +
@@ -2706,6 +2709,12 @@ function baixarTexto(nome, txt, tipo) {
     setTimeout(function () { URL.revokeObjectURL(url); if (a.parentNode) a.parentNode.removeChild(a); }, 2000);
     return true;
   } catch (e) { return false; }
+}
+// Antes de trocar ou apagar tudo, guarda sozinho uma cópia do que existe (para o caso de arrependimento).
+function backupDeSeguranca() {
+  if (!estado || !estado.perfil) return false;
+  if (!Object.keys(estado.checkins).length && !estado.tentacoesVencidas) return false;   // ainda não há progresso a perder
+  return baixarTexto('jornada60-seguranca-' + hoje() + '.json', JSON.stringify(estado, null, 2));
 }
 function exportar() {
   estado.backup.ultimoEm = hoje();
@@ -2734,6 +2743,7 @@ function abrirImportar() {
     '<button type="submit" class="btn primario" id="i-restaurar">Restaurar</button></div></form>');
 }
 function aplicarBackup(dados) {
+  var guardou = backupDeSeguranca();      // o que havia neste navegador vai para um arquivo antes de ser trocado
   estado = dados;
   estado.rascunho = null;
   estado.salvamentoConferido = false;
@@ -2745,7 +2755,7 @@ function aplicarBackup(dados) {
   ui.verInicio = false; ui.pendentes = {}; ui.adiouPendentes = false; ui.viradaPendente = false;
   diaConhecido = hoje();
   ir(telaCerta());
-  avisar('Backup restaurado.');
+  avisar(guardou ? 'Backup restaurado. O que havia antes foi baixado como backup de segurança.' : 'Backup restaurado.');
 }
 function receberBackup(txt, form) {
   var r = interpretar(String(txt || '').trim());
@@ -2755,7 +2765,7 @@ function receberBackup(txt, form) {
   if (!(estado && estado.perfil)) return aplicarBackup(d);
   confirmar({
     titulo: 'Substituir os dados deste navegador?',
-    texto: 'Backup de ' + d.perfil.nome + ', com início em ' + dataBR(d.perfil.inicio) + ' e ' + qtd(marcados, 'dia marcado', 'dias marcados') + '. O que está aqui agora será trocado por ele.',
+    texto: 'Backup de ' + d.perfil.nome + ', com início em ' + dataBR(d.perfil.inicio) + ' e ' + qtd(marcados, 'dia marcado', 'dias marcados') + '. O que está aqui agora será trocado por ele (antes, o app baixa uma cópia de segurança do que existe).',
     sim: 'Substituir pelo backup'
   }).then(function (ok) { if (ok) aplicarBackup(d); });
 }
@@ -2763,9 +2773,10 @@ function receberBackup(txt, form) {
 /* ---------- Reiniciar jornada (confirmação dupla) ---------- */
 function abrirReiniciar() {
   abrir('<h2>Reiniciar a jornada?</h2>' +
-    '<p>Isto apaga <b>todos os check-ins</b>, o recorde, o contador de tentações e o histórico de mensagens deste navegador. Não dá para desfazer.</p>' +
+    '<p>Isto apaga <b>todos os check-ins</b>, o recorde, o contador de tentações e o histórico de mensagens deste navegador. ' +
+    'Antes de apagar, o app baixa sozinho uma cópia de segurança.</p>' +
     '<label class="marcar"><input type="checkbox" id="z-manter" checked><span>Manter a minha configuração: nome, motivos, pessoa de confiança, saídas rápidas e a lista de recompensas (que voltam a ficar bloqueadas).</span></label>' +
-    '<button type="button" class="btn secundario" data-acao="exportar">' + IC.baixar + 'Fazer um backup antes</button>' +
+    '<button type="button" class="btn secundario" data-acao="exportar">' + IC.baixar + 'Fazer um backup agora</button>' +
     '<div class="dlg-acoes"><button type="button" class="btn secundario" data-acao="fechar" data-foco>Cancelar</button>' +
     '<button type="button" class="btn fantasma" id="z-continuar" data-acao="reiniciar-2">Continuar</button></div>');
 }
@@ -3250,6 +3261,7 @@ ACOES['reiniciar-2'] = function (el) {
 FORMS.reiniciar = function (form) {
   if ($('#z-texto', form).value.trim().toUpperCase() !== 'REINICIAR') return mostrarErro('#z-erro', 'Para confirmar, escreva a palavra REINICIAR.', form);
   var manter = form.getAttribute('data-manter') === '1', velho = estado, novo = estadoNovo();
+  var guardou = backupDeSeguranca();      // cópia do que vai ser apagado
   if (manter && velho.perfil) {
     novo.perfil = JSON.parse(JSON.stringify(velho.perfil));
     novo.perfil.inicio = hoje();
@@ -3264,7 +3276,7 @@ FORMS.reiniciar = function (form) {
   fecharTodas();
   ui.verInicio = false; ui.pendentes = {}; ui.adiouPendentes = false; ui.viradaPendente = false;
   ir(telaCerta());
-  avisar(manter ? 'Jornada reiniciada. Hoje é o Dia 1.' : 'Tudo apagado. Vamos configurar de novo.');
+  avisar((manter ? 'Jornada reiniciada. Hoje é o Dia 1.' : 'Tudo apagado. Vamos configurar de novo.') + (guardou ? ' Uma cópia de segurança do que havia foi baixada.' : ''));
 };
 ACOES['ver-final'] = function () { ui.verInicio = false; ir('final'); };
 ACOES['ver-inicio'] = function () { ui.verInicio = true; ir('inicio'); };
@@ -3274,8 +3286,9 @@ ACOES['baixar-bruto'] = function () {
   else avisar('Este navegador não deixou baixar o arquivo.', 'ruim');
 };
 ACOES['zerar-erro'] = function () {
-  confirmar({ titulo: 'Começar do zero?', texto: 'Os dados que estão neste navegador serão apagados. Baixe uma cópia antes, se ainda não baixou.', sim: 'Apagar e começar', classeSim: 'sos' }).then(function (ok) {
+  confirmar({ titulo: 'Começar do zero?', texto: 'Os dados que estão neste navegador serão apagados. Antes de apagar, o app baixa uma cópia deles como estão.', sim: 'Apagar e começar', classeSim: 'sos' }).then(function (ok) {
     if (!ok) return;
+    baixarTexto('jornada60-dados-como-estao.txt', erroDeCarga ? erroDeCarga.bruto : '', 'text/plain');   // guarda uma cópia antes de apagar
     erroDeCarga = null;
     estado = estadoNovo();
     salvar();

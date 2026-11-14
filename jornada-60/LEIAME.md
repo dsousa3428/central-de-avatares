@@ -38,8 +38,9 @@ aparelho). Em qualquer caso, quem garante o progresso é o backup.
 - Para **restaurar**: engrenagem → **Restaurar backup** e escolha o arquivo (ou cole o texto). Em um navegador novo,
   a primeira tela tem o atalho “Já tenho um backup: restaurar”.
 - **Trocar de aparelho ou de navegador** é isto: baixar o backup no antigo e restaurar no novo.
-- **Reiniciar jornada** (engrenagem → Reiniciar jornada…) apaga os check-ins e pede duas confirmações. Faça um
-  backup antes.
+- **Reiniciar jornada** (engrenagem → Reiniciar jornada…) apaga os check-ins e pede duas confirmações.
+- Antes de reiniciar, ou de restaurar um backup por cima do que existe, o app baixa sozinho uma cópia de segurança
+  (`jornada60-seguranca-AAAA-MM-DD.json`). Se você se arrepender, é só restaurar esse arquivo.
 
 ## Como editar as mensagens
 

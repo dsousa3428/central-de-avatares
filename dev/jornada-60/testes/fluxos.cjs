@@ -338,9 +338,12 @@ async function primeiraAbertura(nav) {
   await q.fill('#i-texto', JSON.stringify(editado));
   await q.click('#i-restaurar');
   confere((await txt(q, 'dialog')).includes('Substituir os dados deste navegador?'), 'importar por cima de dados existentes pede confirmação');
-  await naJanela(q, 'Substituir pelo backup');
+  const [seguranca] = await Promise.all([q.waitForEvent('download'), naJanela(q, 'Substituir pelo backup')]);
   await q.waitForFunction(() => window.__j60.estado().perfil.nome === 'Outro Nome');
   confere((await txt(q, '#titulo')).includes('Outro Nome'), 'importar por texto colado funciona');
+  const copia = JSON.parse(fs.readFileSync(await seguranca.path(), 'utf8'));
+  confere(seguranca.suggestedFilename() === 'jornada60-seguranca-2026-12-13.json' && copia.perfil.nome === 'Davi' && Object.keys(copia.checkins).length === 13,
+    'antes de substituir, o app baixa sozinho uma cópia de segurança do que havia', seguranca.suggestedFilename());
   // backup de versão mais nova é recusado, sem estragar nada
   await q.click('#b-ajustes'); await q.click('#a-importar');
   await q.fill('#i-texto', JSON.stringify(Object.assign({}, backup, { versao: 99 })));
@@ -448,8 +451,11 @@ async function reinicioELembrete(nav) {
   await p.click('#z-confirmar');
   confere((await txt(p, '#z-erro')).includes('REINICIAR') && Object.keys((await A.estado(p)).checkins).length === 14, 'segunda confirmação: sem a palavra certa, nada é apagado');
   await p.fill('#z-texto', 'REINICIAR');
-  await p.click('#z-confirmar');
+  const [antesDeApagar] = await Promise.all([p.waitForEvent('download'), p.click('#z-confirmar')]);
   await p.waitForSelector('#b-continuar');
+  const guardado = JSON.parse(fs.readFileSync(await antesDeApagar.path(), 'utf8'));
+  confere(antesDeApagar.suggestedFilename() === 'jornada60-seguranca-2026-12-15.json' && Object.keys(guardado.checkins).length === 14,
+    'antes de reiniciar, o app baixa sozinho uma cópia de segurança com os 14 check-ins', antesDeApagar.suggestedFilename());
   let e = await A.estado(p);
   confere(Object.keys(e.checkins).length === 0 && e.perfil.nome === 'Ana' && e.perfil.inicio === '2026-12-15' && e.perfil.motivos.length === 2, 'reiniciar mantendo a configuração: check-ins zerados, perfil mantido, início hoje');
   confere(e.recompensas.length === 1 && e.recompensas[0].liberadaEm === null && e.tentacoesVencidas === 0, 'recompensas voltam a ficar bloqueadas');

@@ -80,8 +80,9 @@ async function dadosEstragados(nav) {
   await p.locator('dialog').last().getByRole('button', { name: 'Cancelar', exact: true }).click();
   confere((await p.evaluate(() => localStorage.getItem('jornada60:teste'))).includes('"versao":99'), '“Começar do zero” pede confirmação');
   await p.click('[data-acao="zerar-erro"]');
-  await p.locator('dialog').last().getByRole('button', { name: 'Apagar e começar', exact: true }).click();
+  const [antesDeZerar] = await Promise.all([p.waitForEvent('download'), p.locator('dialog').last().getByRole('button', { name: 'Apagar e começar', exact: true }).click()]);
   await p.waitForSelector('#g-comecar');
+  confere(fs.readFileSync(await antesDeZerar.path(), 'utf8').includes('"versao":99'), 'ao zerar, o app baixa antes uma cópia do que havia');
   confere((await guardado(p, 'jornada60:teste')).versao === 1, 'depois de confirmar, começa do zero');
   // restaurar um backup direto da tela de aviso
   await p.evaluate(() => localStorage.setItem('jornada60:teste', 'lixo'));
