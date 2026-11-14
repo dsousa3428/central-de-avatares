@@ -2,7 +2,11 @@
 const path = require('path');
 const { chromium } = require('playwright');
 
-const ARQUIVO = path.resolve(__dirname, '..', '..', '..', 'jornada-60', 'index.html');
+// J60_ARQUIVO=/caminho/de/outro/index.html roda os mesmos testes contra outra cópia do app
+// (útil para confirmar que um teste novo falha na versão anterior).
+const ARQUIVO = process.env.J60_ARQUIVO
+  ? path.resolve(process.env.J60_ARQUIVO)
+  : path.resolve(__dirname, '..', '..', '..', 'jornada-60', 'index.html');
 const URL_BASE = 'file://' + ARQUIVO;
 const CAPTURAS = path.resolve(__dirname, '..', 'capturas');
 

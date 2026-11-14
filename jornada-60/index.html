@@ -88,8 +88,12 @@ svg { display: block; }
   padding: 16px 16px calc(var(--barra) + 28px + env(safe-area-inset-bottom, 0px));
 }
 .app.sem-barra { padding-bottom: calc(28px + env(safe-area-inset-bottom, 0px)); }
-.entrar { animation: entrar .28s ease both; }
+.entrar { animation: entrar .28s ease both, assentar .35s step-end both; }
 @keyframes entrar { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+/* Logo depois de uma tela ou janela aparecer, ela não aceita toque por um instante: um segundo toque dado no embalo
+   não aciona o botão novo que surgiu embaixo do dedo (por exemplo, “Venci hoje” no lugar de “Continuar”). */
+@keyframes assentar { from { pointer-events: none; } to { pointer-events: auto; } }
+.entrar .checkin .acoes { animation: assentar .6s step-end both; }
 
 /* ---------- Botões ---------- */
 .btn {
@@ -343,7 +347,7 @@ dialog.dlg {
   box-shadow: 0 24px 70px rgba(0, 0, 0, .6);
   overflow: hidden;
 }
-dialog.dlg[open] { display: flex; flex-direction: column; animation: entrar .22s ease both; }
+dialog.dlg[open] { display: flex; flex-direction: column; animation: entrar .22s ease both, assentar .35s step-end both; }
 dialog.dlg::backdrop { background: rgba(4, 6, 10, .74); }
 dialog.dlg.sem-modal { position: fixed; inset: 0; margin: auto; z-index: 1000; height: fit-content; }
 .dlg-corpo { padding: 22px 20px 20px; overflow-y: auto; display: grid; gap: 16px; overscroll-behavior: contain; }
@@ -453,6 +457,9 @@ dialog canvas.confete { position: absolute; z-index: 0; }
 /* ---------- Menos movimento ---------- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
+  /* a proteção contra toque duplo não é movimento: continua valendo (só a animação de entrada some) */
+  .entrar, dialog.dlg[open] { animation-duration: .001ms, .35s !important; }
+  .entrar .checkin .acoes { animation-duration: .6s !important; }
   .respiro .bolha, .respiro .bolha.insp, .respiro .bolha.exp { transform: scale(.82); }
 }
 </style>
@@ -1573,14 +1580,14 @@ function normalizar(o) {
   e.tentacoesVencidas = tv > 0 && tv < 1e6 ? tv : 0;
   var ms = o.mensagens && typeof o.mensagens === 'object' ? o.mensagens : {};
   if (ms.vistas && typeof ms.vistas === 'object') {
-    Object.keys(ms.vistas).slice(0, 20).forEach(function (k) {
-      if (/^[a-z0-9]{1,20}$/.test(k) && Array.isArray(ms.vistas[k])) {
+    CONJUNTOS.forEach(function (k) {       // só os conjuntos que existem (um backup adulterado não cria outros nomes)
+      if (Object.prototype.hasOwnProperty.call(ms.vistas, k) && Array.isArray(ms.vistas[k])) {
         e.mensagens.vistas[k] = ms.vistas[k].filter(function (x) { return typeof x === 'string' && x.length < 30; }).slice(-400);
       }
     });
   }
   var md = ms.dia;
-  if (md && typeof md === 'object' && dataValida(md.data) && typeof md.conjunto === 'string' && typeof md.id === 'string') {
+  if (md && typeof md === 'object' && dataValida(md.data) && CONJUNTOS.indexOf(md.conjunto) >= 0 && typeof md.id === 'string') {
     e.mensagens.dia = { data: md.data, conjunto: md.conjunto.slice(0, 20), id: md.id.slice(0, 30), vista: !!md.vista, missaoFeita: !!md.missaoFeita };
   }
   var b = o.backup && typeof o.backup === 'object' ? o.backup : {};
@@ -1608,23 +1615,25 @@ function interpretar(txt) {
   if (o.versao > VERSAO) return { erro: 'versao' };
   return { dados: normalizar(migrar(o)) };
 }
+var ultimoGravado = null;   // o último texto que este app leu ou gravou na chave
+var passivo = false;        // true enquanto a tela se ajusta a dados vindos de outra aba: nesse momento nada é gravado
 function carregar() {
   var txt = lerGuardado();
+  ultimoGravado = txt;
   if (txt == null || txt === '') return estadoNovo();
   var r = interpretar(txt);
   if (r.erro) { erroDeCarga = { tipo: r.erro, bruto: txt }; return null; }
   return r.dados;
 }
-var ultimoGravado = null;
 function salvar() {
-  if (!estado) return false;
+  if (!estado || passivo) return false;
   var txt = JSON.stringify(estado);
-  ultimoGravado = txt;
   if (semArmazenamento) return false;
   try {
     window.localStorage.setItem(CHAVE, txt);
     // confere se ficou mesmo gravado (alguns navegadores aceitam e não guardam)
     if (window.localStorage.getItem(CHAVE) !== txt) throw new Error('não gravou');
+    ultimoGravado = txt;
     falhaAoSalvar = false;
     return true;
   } catch (e) {
@@ -1685,6 +1694,7 @@ var RESERVA = {
   }
 };
 var BANCO = {};
+var emReserva = {};          // conjuntos que estão usando a mensagem de reserva (bloco editável quebrado ou vazio)
 var problemaNoBanco = null;
 
 function hash(s) {
@@ -1717,6 +1727,7 @@ function prepararBanco() {
       var r = RESERVA[chave] || RESERVA.fases;
       boas.push({ id: hash(r.ref + '|' + r.mensagem), ref: r.ref, versiculo: r.versiculo, mensagem: r.mensagem, missao: r.missao || '' });
       faltando.push(chave);
+      emReserva[chave] = true;
     }
     BANCO[chave] = boas;
   });
@@ -1727,13 +1738,16 @@ function prepararBanco() {
     'João Ferreira de Almeida, edição Revista e Corrigida de 1911 (domínio público), com a ortografia atualizada';
 }
 function entradaDoBanco(conjunto, id) {
-  var lista = BANCO[conjunto] || [];
+  var lista = CONJUNTOS.indexOf(conjunto) >= 0 ? BANCO[conjunto] : null;
+  if (!Array.isArray(lista)) return null;
   for (var i = 0; i < lista.length; i++) if (lista[i].id === id) return lista[i];
   return null;
 }
 // Escolhe uma entrada que ainda não apareceu; só repete quando todas do conjunto já foram vistas.
 function sortear(conjunto) {
   var lista = BANCO[conjunto];
+  // com o banco quebrado, vale a mensagem de reserva e o histórico do que já apareceu fica intacto para quando ele voltar
+  if (emReserva[conjunto]) return lista[0];
   var vistas = (estado.mensagens.vistas[conjunto] || []).filter(function (id) { return !!entradaDoBanco(conjunto, id); });
   var novas = lista.filter(function (e) { return vistas.indexOf(e.id) < 0; });
   if (!novas.length) {
@@ -1954,7 +1968,7 @@ function abrir(html, opts) {
   d.addEventListener('cancel', function (ev) { if (opts.semEsc) ev.preventDefault(); });
   var apertouNoFundo = false;
   d.addEventListener('mousedown', function (ev) { apertouNoFundo = ev.target === d; });
-  d.addEventListener('click', function (ev) { if (ev.target === d && apertouNoFundo && !opts.semFundo) fechar(d, ''); });
+  d.addEventListener('click', function (ev) { if (ev.target === d && apertouNoFundo && !opts.semFundo && !(ev.detail > 1)) fechar(d, ''); });
   pilha.push(d);
   if (typeof d.showModal === 'function') d.showModal();
   else { d.classList.add('sem-modal'); d.setAttribute('open', ''); }
@@ -1974,14 +1988,28 @@ function fechar(d, retorno) {
 }
 function fecharTodas() { pilha.slice().reverse().forEach(function (d) { fechar(d, ''); }); }
 function janelaDe(el) { return el.closest('dialog'); }
-function confirmar(o) {
+// Pergunta com dois ou mais botões. Devolve (em promessa) o valor do botão escolhido; fechar de outro jeito devolve ''.
+function perguntar(o) {
   return new Promise(function (resolver) {
-    abrir('<h2>' + esc(o.titulo) + '</h2>' + (o.texto ? '<p>' + esc(o.texto) + '</p>' : '') + (o.html || '') +
-      '<div class="dlg-acoes">' +
-      '<button type="button" class="btn secundario" data-acao="fechar" data-foco>' + esc(o.nao || 'Cancelar') + '</button>' +
-      '<button type="button" class="btn ' + (o.classeSim || 'primario') + '" data-acao="fechar" data-retorno="sim">' + esc(o.sim || 'Confirmar') + '</button>' +
-      '</div>', { semX: true, aoFechar: function (ret) { resolver(ret === 'sim'); } });
+    abrir('<h2>' + esc(o.titulo) + '</h2>' + (o.texto ? '<p>' + esc(o.texto) + '</p>' : '') +
+      '<div class="dlg-acoes">' + o.botoes.map(function (b) {
+        return '<button type="button" class="btn ' + (b.classe || 'secundario') + '" data-acao="fechar" data-retorno="' + esc(b.valor || '') + '"' +
+          (b.foco ? ' data-foco' : '') + '>' + esc(b.texto) + '</button>';
+      }).join('') + '</div>', { semX: true, aoFechar: function (ret) { resolver(ret || ''); } });
   });
+}
+function confirmar(o) {
+  return perguntar({
+    titulo: o.titulo, texto: o.texto,
+    botoes: [{ texto: o.nao || 'Cancelar', valor: '', foco: true }, { texto: o.sim || 'Confirmar', valor: 'sim', classe: o.classeSim || 'primario' }]
+  }).then(function (v) { return v === 'sim'; });
+}
+// Uma janela de confirmação pode ficar aberta enquanto o dia vira. Devolve true (e avisa) se hoje já não é o dia em que ela abriu.
+function diaMudouDesde(dia) {
+  if (hoje() === dia) return false;
+  verificarVirada();
+  avisar('O dia virou. Atualizei a tela: confira antes de marcar.');
+  return true;
 }
 
 /* ---------- Confete em canvas ---------- */
@@ -2081,7 +2109,7 @@ function faixasDeAviso() {
 // Até o app ser reaberto uma vez com os dados no lugar, convida a pessoa a fazer esse teste.
 function dicaDeSalvamento() {
   if (estado.salvamentoConferido || semArmazenamento || falhaAoSalvar) return '';
-  return '<div class="faixa" id="dica-salvar"><p><b>Só para garantir:</b> feche esta aba e abra o app de novo. Se ele lembrar de você, ' +
+  return '<div class="faixa" id="dica-salvar"><p><b>Só para garantir:</b> feche o navegador (todas as janelas) e abra o app de novo. Se ele lembrar de você, ' +
     'este navegador está guardando o seu progresso (este aviso some sozinho).</p></div>';
 }
 function lembreteDeBackup() {
@@ -2645,20 +2673,26 @@ function nomeSt(st) { return st === 'v' ? 'Venci' : 'Recaí'; }
 function corrigirDia(data) {
   var atual = estado.checkins[data];
   if (!atual || virou()) return;
-  var novo = atual === 'v' ? 'r' : 'v', ehHoje = data === hoje();
-  confirmar({
+  var aberto = hoje(), novo = atual === 'v' ? 'r' : 'v', ehHoje = data === aberto;
+  var botoes = [{ texto: 'Cancelar', valor: '', foco: true }];
+  if (ehHoje) botoes.push({ texto: 'Tirar a marcação', valor: 'tirar' });        // o dia de hoje ainda não acabou: pode voltar a ficar em aberto
+  botoes.push({ texto: 'Mudar para “' + nomeSt(novo) + '”', valor: 'mudar', classe: 'primario' });
+  perguntar({
     titulo: 'Corrigir ' + (ehHoje ? 'o check-in de hoje' : 'o dia ' + dataBR(data)) + '?',
-    texto: 'Ele está marcado como “' + nomeSt(atual) + '”. Ao confirmar, passa a ser “' + nomeSt(novo) + '” e a sua sequência é recalculada.' +
-      (novo === 'r' ? ' As recompensas já liberadas continuam suas.' : ''),
-    sim: 'Mudar para “' + nomeSt(novo) + '”'
-  }).then(function (ok) {
-    if (!ok || virou() || estado.checkins[data] !== atual) return;
-    var res = mudarCheckins(function (ck) { ck[data] = novo; });
+    texto: 'Ele está marcado como “' + nomeSt(atual) + '”. Ao mudar, passa a ser “' + nomeSt(novo) + '” e a sua sequência é recalculada.' +
+      (novo === 'r' ? ' As recompensas já liberadas continuam suas.' : '') +
+      (ehHoje ? ' Se você marcou sem querer, use “Tirar a marcação”: o dia de hoje volta a ficar em aberto.' : ''),
+    botoes: botoes
+  }).then(function (escolha) {
+    if (!escolha || diaMudouDesde(aberto) || estado.checkins[data] !== atual) return;
+    var tirar = escolha === 'tirar';
+    var res = mudarCheckins(function (ck) { if (tirar) delete ck[data]; else ck[data] = novo; });
     var lista = $('#hist-lista');
     if (lista) lista.innerHTML = htmlHistorico();
     var destino = telaCerta();
     if (destino !== ui.tela) { fecharTodas(); ir(destino); } else render();
     if (res.novas.length) abrirFesta(res.novas, res.depois, null);
+    else if (tirar) avisar('Marcação de hoje retirada. O dia está em aberto de novo.');
     else if (ehHoje && novo === 'r') abrirGraca(res.depois);
     else avisar('Corrigido. Sequência atual: ' + qtd(res.depois.seqAtual, 'dia', 'dias') + '.');
   });
@@ -2684,7 +2718,7 @@ function abrirAjustes() {
     '<section class="secao-dlg"><h3>Backup</h3>' +
     '<p id="a-situacao">' + ((semArmazenamento || falhaAoSalvar) ? '<b>Atenção: este navegador não está conseguindo guardar os dados.</b> Faça um backup agora.'
       : estado.salvamentoConferido ? 'Este navegador está guardando o seu progresso (conferido ao reabrir o app).'
-        : 'O progresso está sendo gravado neste navegador. Para conferir, feche e abra o app uma vez.') + '</p>' +
+        : 'O progresso está sendo gravado neste navegador. Para conferir, feche o navegador e abra o app de novo.') + '</p>' +
     '<p>' + (b.ultimoEm ? 'Último backup: <b>' + esc(dataBR(b.ultimoEm)) + '</b>.' : 'Você ainda não fez backup.') +
     ' Os dados ficam só neste navegador: se ele for limpo ou você trocar de aparelho, é o backup que traz tudo de volta.</p>' +
     '<div class="dlg-acoes"><button type="button" class="btn secundario" id="a-exportar" data-acao="exportar">' + IC.baixar + 'Baixar backup</button>' +
@@ -2732,9 +2766,9 @@ function exportar() {
     '<button type="button" class="btn primario" id="x-ok" data-acao="fechar" data-foco>Concluir</button></div>');
 }
 function abrirImportar() {
-  var tem = !!(estado && estado.perfil);
+  var tem = !!(estado && estado.perfil) || !!erroDeCarga;
   abrir('<h2>Restaurar um backup</h2>' +
-    '<p>Escolha o arquivo <b>.json</b> que você baixou antes.' + (tem ? ' Os dados atuais deste navegador serão <b>substituídos</b> pelos do backup.' : '') + '</p>' +
+    '<p>Escolha o arquivo <b>.json</b> que você baixou antes.' + (tem ? ' O que está guardado neste navegador será <b>substituído</b> pelo backup (o app pede confirmação e baixa uma cópia antes).' : '') + '</p>' +
     '<form data-form="importar" novalidate style="display:grid;gap:14px">' +
     '<div class="campo"><label for="i-arquivo">Arquivo de backup</label><input type="file" id="i-arquivo" accept=".json,application/json,text/plain"></div>' +
     '<div class="campo"><label for="i-texto">Ou cole aqui o texto do backup</label><textarea id="i-texto" spellcheck="false" autocomplete="off"></textarea></div>' +
@@ -2755,13 +2789,27 @@ function aplicarBackup(dados) {
   ui.verInicio = false; ui.pendentes = {}; ui.adiouPendentes = false; ui.viradaPendente = false;
   diaConhecido = hoje();
   ir(telaCerta());
-  avisar(guardou ? 'Backup restaurado. O que havia antes foi baixado como backup de segurança.' : 'Backup restaurado.');
+  avisar(guardou ? 'Backup restaurado. Pedi ao navegador para baixar uma cópia de segurança do que havia: confira nos downloads.' : 'Backup restaurado.');
 }
 function receberBackup(txt, form) {
   var r = interpretar(String(txt || '').trim());
   if (r.erro === 'versao') return mostrarErro('#i-erro', 'Este backup foi feito por uma versão mais nova do app. Abra o arquivo mais recente do Jornada 60.', form);
   if (r.erro || !r.dados.perfil) return mostrarErro('#i-erro', 'Este não parece ser um backup do Jornada 60. Confira se escolheu o arquivo certo.', form);
   var d = r.dados, marcados = Object.keys(d.checkins).length;
+  if (erroDeCarga) {
+    // há dados guardados que o app não conseguiu abrir: não podem sumir sem confirmação e sem uma cópia
+    var bruto = erroDeCarga.bruto;
+    confirmar({
+      titulo: 'Substituir o que está guardado?',
+      texto: 'Este navegador tem dados que o app não conseguiu abrir. Eles serão trocados pelo backup de ' + d.perfil.nome + ' (início em ' + dataBR(d.perfil.inicio) + '). Antes, o app baixa uma cópia deles como estão.',
+      sim: 'Restaurar o backup'
+    }).then(function (ok) {
+      if (!ok) return;
+      baixarTexto('jornada60-dados-como-estao.txt', bruto, 'text/plain');
+      aplicarBackup(d);
+    });
+    return;
+  }
   if (!(estado && estado.perfil)) return aplicarBackup(d);
   confirmar({
     titulo: 'Substituir os dados deste navegador?',
@@ -3047,9 +3095,10 @@ ACOES.recai = function () {
     texto: 'A sua sequência volta a zero. As recompensas que você já liberou continuam suas, e o seu recorde fica guardado.',
     sim: 'Registrar recaída', classeSim: 'secundario'
   }).then(function (ok) {
-    if (!ok || virou() || estado.checkins[dia]) return;
+    if (!ok || diaMudouDesde(dia) || estado.checkins[dia]) return;
     var res = mudarCheckins(function (ck) { ck[dia] = 'r'; });
-    render();
+    var destino = telaCerta();
+    if (destino !== ui.tela) ir(destino); else render();
     abrirGraca(res.depois);
   });
 };
@@ -3150,10 +3199,16 @@ ACOES['premio-resgatar'] = function (el) {
 ACOES['premio-desfazer'] = function (el) {
   var id = el.getAttribute('data-id');
   var r = estado.recompensas.filter(function (x) { return x.id === id; })[0];
-  if (!r) return;
-  r.resgatadaEm = null;
-  salvar();
-  render();
+  if (!r || !r.resgatadaEm) return;
+  // pede confirmação: o botão aparece no mesmo lugar de “Já resgatei”, e um toque duplo desfaria o resgate sem querer
+  confirmar({ titulo: 'Desmarcar o resgate?', texto: '“' + r.nome + '” volta a aparecer como liberada, esperando você resgatar.', sim: 'Desmarcar' }).then(function (ok) {
+    if (!ok) return;
+    var atual = estado.recompensas.filter(function (x) { return x.id === id; })[0];
+    if (!atual) return;
+    atual.resgatadaEm = null;
+    salvar();
+    render();
+  });
 };
 
 /* configuração guiada */
@@ -3276,7 +3331,7 @@ FORMS.reiniciar = function (form) {
   fecharTodas();
   ui.verInicio = false; ui.pendentes = {}; ui.adiouPendentes = false; ui.viradaPendente = false;
   ir(telaCerta());
-  avisar((manter ? 'Jornada reiniciada. Hoje é o Dia 1.' : 'Tudo apagado. Vamos configurar de novo.') + (guardou ? ' Uma cópia de segurança do que havia foi baixada.' : ''));
+  avisar((manter ? 'Jornada reiniciada. Hoje é o Dia 1.' : 'Tudo apagado. Vamos configurar de novo.') + (guardou ? ' Pedi ao navegador para baixar uma cópia de segurança do que havia: confira nos downloads.' : ''));
 };
 ACOES['ver-final'] = function () { ui.verInicio = false; ir('final'); };
 ACOES['ver-inicio'] = function () { ui.verInicio = true; ir('inicio'); };
@@ -3355,17 +3410,64 @@ ACOES['teste-dia'] = function (el) {
   if (!verificarVirada()) render();
 };
 
+/* ---------- Dados que mudaram por fora (outra aba, outra cópia do arquivo) ---------- */
+// Adota o que está guardado quando ele é mais novo do que esta aba conhece. Enquanto a tela se ajusta, nada é
+// gravado (senão duas abas ficariam respondendo uma à outra).
+function adotar(txt) {
+  ultimoGravado = txt;
+  var r = interpretar(txt);
+  if (r.erro && r.erro !== 'versao') return;       // não é do app: continua valendo o que está na memória (a próxima gravação conserta)
+  // Daqui até a tela estar redesenhada, nada é gravado. Vale também para o que roda quando as janelas abertas se
+  // fecham (a celebração, por exemplo, segue para a próxima tela): com os dados velhos da memória, isso gravaria por
+  // cima do que a outra aba acabou de fazer.
+  passivo = true;
+  try {
+    fecharTodas();
+    if (r.erro === 'versao') {
+      // gravado por uma versão mais nova do app: esta aba para de gravar, para não estragar o formato novo
+      estado = null;
+      erroDeCarga = { tipo: 'versao', bruto: txt };
+      ui.tela = 'erro';
+      render();
+      return;
+    }
+    estado = r.dados;
+    erroDeCarga = null;
+    ui.pendentes = {}; ui.adiouPendentes = false; ui.viradaPendente = false; ui.verInicio = false;
+    diaConhecido = hoje();
+    ir(telaCerta());
+  } finally { passivo = false; }
+  avisar('Os dados mudaram em outra aba. Atualizei esta tela.');
+}
+// Confere se o que está guardado mudou desde a última leitura ou gravação desta aba. Devolve true se adotou a novidade.
+function adotarSeMudou() {
+  // se a última gravação falhou, o que vale é a memória desta aba (é a única cópia do que foi feito agora)
+  if (semArmazenamento || falhaAoSalvar || !diaConhecido) return false;
+  var txt;
+  try { txt = window.localStorage.getItem(CHAVE); } catch (e) { return false; }
+  if (txt == null || txt === '' || txt === ultimoGravado) return false;
+  adotar(txt);
+  return true;
+}
+function aoVoltarParaAAba() { if (!adotarSeMudou()) verificarVirada(); }
+
 /* ---------- Ligações com o navegador ---------- */
 document.addEventListener('click', function (ev) {
   var alvo = ev.target && ev.target.closest ? ev.target.closest('[data-acao]') : null;
   if (!alvo || alvo.disabled) return;
-  var fn = ACOES[alvo.getAttribute('data-acao')];
+  var acao = alvo.getAttribute('data-acao');
+  // segundo toque de um toque duplo: não vale (o botão embaixo do dedo pode ter mudado).
+  // A exceção são os botões de andar os dias no modo de teste, feitos para serem apertados várias vezes seguidas.
+  if (ev.detail > 1 && acao !== 'teste-dia') return;
+  if (adotarSeMudou()) return;     // os dados mudaram por fora: a tela foi atualizada, e a ação não é aplicada sobre dados velhos
+  var fn = ACOES[acao];
   if (fn) fn(alvo, ev);
 });
 document.addEventListener('submit', function (ev) {
   var form = ev.target, nome = form && form.getAttribute ? form.getAttribute('data-form') : null;
   if (!nome) return;
   ev.preventDefault();
+  if (adotarSeMudou()) return;
   if (FORMS[nome]) FORMS[nome](form, ev);
 });
 document.addEventListener('change', function (ev) {
@@ -3378,25 +3480,14 @@ document.addEventListener('change', function (ev) {
 document.addEventListener('input', function (ev) {
   if (ev.target && ev.target.id === 'g-inicio') atualizarDia60();
 });
-// Virada da meia-noite: quando a aba volta ao foco (ou a cada meio minuto), confere se o dia mudou.
-document.addEventListener('visibilitychange', function () { if (!document.hidden) verificarVirada(); });
-window.addEventListener('focus', verificarVirada);
-window.addEventListener('pageshow', verificarVirada);
-window.setInterval(verificarVirada, 30000);
-// Outra aba do mesmo navegador mudou os dados: recarrega, para uma aba não apagar o que a outra gravou.
+// Quando a aba volta ao foco (ou a cada meio minuto): confere se os dados mudaram por fora e se o dia virou.
+document.addEventListener('visibilitychange', function () { if (!document.hidden) aoVoltarParaAAba(); });
+window.addEventListener('focus', aoVoltarParaAAba);
+window.addEventListener('pageshow', aoVoltarParaAAba);
+window.setInterval(aoVoltarParaAAba, 30000);
+// Outra aba do mesmo navegador gravou: esta adota o que foi gravado, para uma aba não apagar o que a outra fez.
 window.addEventListener('storage', function (ev) {
-  if (ev.key !== CHAVE || ev.newValue == null || ev.newValue === ultimoGravado) return;
-  var r = interpretar(ev.newValue);
-  if (r.erro) return;
-  estado = r.dados;
-  ultimoGravado = ev.newValue;
-  erroDeCarga = null;
-  fecharTodas();
-  ui.pendentes = {}; ui.adiouPendentes = false; ui.viradaPendente = false;
-  diaConhecido = hoje();
-  ir(telaCerta());
-  render();
-  avisar('Os dados mudaram em outra aba. Atualizei esta tela.');
+  if (ev.key === CHAVE || ev.key === null) adotarSeMudou();
 });
 
 /* ---------- Início ---------- */
@@ -3409,7 +3500,9 @@ function iniciar() {
     ui.tela = 'erro';
     render();
   } else {
-    var reabriuComDados = !!estado.perfil && !estado.salvamentoConferido;
+    var recarga = false;      // recarregar a aba não prova nada: só conta abrir o app de novo
+    try { var nav = window.performance.getEntriesByType('navigation')[0]; recarga = !!nav && nav.type === 'reload'; } catch (e) { /* sem suporte */ }
+    var reabriuComDados = !!estado.perfil && !estado.salvamentoConferido && !recarga;
     if (reabriuComDados) estado.salvamentoConferido = true;       // os dados sobreviveram a um fechar-e-abrir
     if (estado.perfil && (liberarAlcancadas(calc()).length || reabriuComDados)) salvar();
     ir(telaCerta());

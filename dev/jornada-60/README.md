@@ -22,12 +22,27 @@ node dev/jornada-60/testes/todos.cjs
 | `mensagens.cjs` | o banco **dentro do `index.html`**: cada versículo igual ao texto conferido, tamanhos, fases, sorteio sem repetição, banco quebrado |
 | `tentacao.cjs` | passo a passo do botão “Estou sendo tentado”, com o relógio controlado nos 90 segundos |
 | `robustez.cjs` | relógio de verdade às 23h30 em São Paulo, dados ilegíveis, navegador que não salva, só teclado, telas de 320–390 px, duas abas |
+| `revisao.cjs` | os casos achados por uma revisão independente do código: janela de confirmação aberta na virada do dia, toque duplo (o segundo toque não vale no botão que apareceu embaixo do dedo), “Tirar a marcação” de hoje, restaurar backup na tela de dados ilegíveis, dados gravados por outra aba ou por uma versão mais nova, backup adulterado, banco quebrado por um dia |
 | `acessibilidade.cjs` | contraste de cada texto visível (mínimo 4,5:1; 3:1 em texto grande), nome de cada botão e rótulo de cada campo, em 37 telas e janelas |
 | `pasta-com-acentos.cjs` | o arquivo guardado em uma pasta com espaços e acentos abre e salva igual |
 | `fotos.cjs`, `fotos-extra.cjs`, `fotos-entrega.cjs` | não são testes: fotografam as telas (`celular` ou `computador`) em `capturas/` para a conferência visual |
 
 O modo de teste do app (`index.html?hoje=AAAA-MM-DD`) simula a data e usa a chave `jornada60:teste` do
 localStorage; só nesse modo existe `window.__j60` (ganchos usados pelos testes).
+
+Um teste novo só vale se **falhar no app sem a correção**. Para conferir, rode-o contra a versão anterior:
+
+```bash
+git show HEAD:jornada-60/index.html > /tmp/j60-anterior.html
+```
+
+```bash
+J60_ARQUIVO=/tmp/j60-anterior.html node dev/jornada-60/testes/revisao.cjs
+```
+
+Duas regras do app que os testes precisam respeitar: uma tela ou janela que acabou de aparecer não aceita toque por
+um instante (0,35 s; os botões do check-in, 0,6 s) e o segundo clique de um clique duplo é ignorado. O `click` do
+Playwright espera o botão aceitar toques; **não use `{ force: true }`** nem `dblclick` para “apertar duas vezes”.
 
 ## Versículos (`versiculos/`)
 

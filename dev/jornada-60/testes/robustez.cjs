@@ -90,7 +90,10 @@ async function dadosEstragados(nav) {
   await p.click('[data-acao="importar"]');
   await p.fill('#i-texto', JSON.stringify({ app: 'jornada60', versao: 1, perfil: { nome: 'Rute', inicio: '2026-11-30', motivos: ['m'] }, checkins: { '2026-11-30': 'v' } }));
   await p.click('#i-restaurar');
+  // como há dados guardados que o app não abriu, ele pergunta antes e baixa uma cópia deles
+  const [copiaDoLixo] = await Promise.all([p.waitForEvent('download'), p.locator('dialog').last().getByRole('button', { name: 'Restaurar o backup', exact: true }).click()]);
   await p.waitForSelector('#b-continuar');
+  confere(fs.readFileSync(await copiaDoLixo.path(), 'utf8') === 'lixo', 'antes de restaurar por cima de dados ilegíveis, o app baixa uma cópia deles');
   confere((await txt(p, '#msg-dia')) === 'Dia 2 de 60' && (await guardado(p, 'jornada60:teste')).perfil.nome === 'Rute', 'da tela de aviso dá para restaurar um backup');
 
   console.log('\n4. Dados esquisitos (backup editado à mão): o app conserta o que dá e não quebra');

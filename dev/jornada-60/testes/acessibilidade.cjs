@@ -95,11 +95,11 @@ function auditar() {
   await olhar('formulário de recompensa'); await p.click('#p-salvar'); await semJanela();
   await p.click('.marco-linha >> text=Dia 7'); await p.fill('#p-nome', 'Fone'); await p.click('#p-salvar'); await semJanela();
   await olhar('guia 6'); await p.click('#g-proximo');
-  await p.waitForSelector('#pend-salvar'); await p.check('input[name="p-2026-11-27"][value="v"]', { force: true }); await p.check('input[name="p-2026-11-28"][value="r"]', { force: true });
+  await p.waitForSelector('#pend-salvar'); await p.click('input[name="p-2026-11-27"][value="v"]'); await p.click('input[name="p-2026-11-28"][value="r"]');
   await olhar('pendentes');
   await p.click('#pend-depois'); await p.waitForSelector('#b-pend-agora'); await olhar('início com pendências');
   await p.click('#b-historico'); await olhar('histórico com pendências'); await p.keyboard.press('Escape'); await semJanela();
-  await p.click('#b-pend-agora'); await p.click('[data-acao="pend-todos"][data-v="v"]'); await p.check('input[name="p-2026-11-28"][value="r"]', { force: true }); await p.click('#pend-salvar');
+  await p.click('#b-pend-agora'); await p.click('[data-acao="pend-todos"][data-v="v"]'); await p.click('input[name="p-2026-11-28"][value="r"]'); await p.click('#pend-salvar');
   await p.waitForSelector('#b-continuar'); await olhar('mensagem do dia');
   await p.click('#b-continuar'); await p.waitForSelector('#checkin'); await olhar('início');
   await p.click('#b-venci'); await p.waitForSelector('dialog .festa'); await p.waitForTimeout(3200); await olhar('celebração de recompensa');

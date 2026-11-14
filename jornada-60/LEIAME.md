@@ -12,6 +12,13 @@ recompensas a cada marco de dias vencidos. Não usa internet e não envia nada p
 Na primeira vez o app faz seis perguntas rápidas (nome, compromisso, data de início, motivos, pessoa de confiança e
 recompensas). Depois é só abrir todo dia e marcar “Venci hoje” ou “Recaí hoje”.
 
+**Marcou errado?** No dia de hoje, toque em “Corrigir o check-in de hoje”: dá para trocar a resposta ou usar
+**“Tirar a marcação”**, que deixa o dia em aberto de novo. Em dias passados, abra o **Histórico** (ou toque no dia,
+na trilha) e troque a resposta. As recompensas já liberadas continuam suas em qualquer caso.
+
+**Um toque de cada vez.** Para ninguém marcar o dia sem querer, uma tela que acabou de aparecer espera um instante
+antes de aceitar toques, e o segundo toque de um toque duplo não vale. Se um toque “não pegou”, é só tocar de novo.
+
 ## Onde fica o meu progresso (leia isto)
 
 O progresso fica guardado **dentro do navegador**, ligado a este arquivo. Por isso:
@@ -19,9 +26,12 @@ O progresso fica guardado **dentro do navegador**, ligado a este arquivo. Por is
 - use **sempre o mesmo navegador** e **não mude o arquivo de pasta nem de nome** (se precisar mudar, faça o backup
   antes e restaure depois);
 - **não use aba anônima** e não mande o navegador “limpar dados de navegação/dados de sites”: isso apaga o progresso;
-- **confira uma vez**: depois de configurar, feche a aba e abra o arquivo de novo. Deve aparecer o aviso
-  “Tudo certo: este navegador está guardando o seu progresso”. Se o app voltar para a configuração, ou mostrar um
-  aviso amarelo dizendo que não consegue guardar, esse navegador não serve: use outro.
+- **confira uma vez**: depois de configurar, **feche o navegador (todas as janelas)** e abra o arquivo de novo. Deve
+  aparecer o aviso “Tudo certo: este navegador está guardando o seu progresso”. Só recarregar a página não vale como
+  conferência. Se o app voltar para a configuração, ou mostrar um aviso amarelo dizendo que não consegue guardar,
+  esse navegador não serve: use outro;
+- pode abrir o app em **mais de uma aba**: a que ficou para trás se atualiza sozinha e avisa (“Os dados mudaram em
+  outra aba”), sem gravar nada velho por cima.
 
 **No celular:** a tela foi desenhada primeiro para o celular, mas cada navegador de celular trata arquivos locais de
 um jeito, e isso não foi testado em um aparelho de verdade. No Android, abra o arquivo pelo aplicativo de arquivos
@@ -39,8 +49,11 @@ um endereço na internet (os dados continuam só no aparelho). Em qualquer caso,
   a primeira tela tem o atalho “Já tenho um backup: restaurar”.
 - **Trocar de aparelho ou de navegador** é isto: baixar o backup no antigo e restaurar no novo.
 - **Reiniciar jornada** (engrenagem → Reiniciar jornada…) apaga os check-ins e pede duas confirmações.
-- Antes de reiniciar, ou de restaurar um backup por cima do que existe, o app baixa sozinho uma cópia de segurança
-  (`jornada60-seguranca-AAAA-MM-DD.json`). Se você se arrepender, é só restaurar esse arquivo.
+- Antes de reiniciar, ou de restaurar um backup por cima do que existe, o app pede ao navegador para baixar uma cópia
+  de segurança (`jornada60-seguranca-AAAA-MM-DD.json`): confira na pasta de downloads. Se você se arrepender, é só
+  restaurar esse arquivo.
+- Se um dia aparecer a tela **“Não consegui abrir os seus dados”**, nada foi apagado: ela deixa baixar os dados como
+  estão (`jornada60-dados-como-estao.txt`) e restaurar um backup. Guarde esse arquivo antes de qualquer outra coisa.
 
 ## Como editar as mensagens
 

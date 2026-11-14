@@ -178,7 +178,7 @@ async function primeiraAbertura(nav) {
   confere((await p.$$('.pend')).length === 2 && (await txt(p, '#titulo')) === 'Como foram estes 2 dias?', 'lista os 2 dias pendentes (04/12 e 05/12)');
   confere(await p.isDisabled('#pend-salvar'), 'não deixa salvar sem responder');
   confere(await p.isVisible('#b-sos'), 'botão de tentação visível também aqui');
-  await p.check('input[name="p-2026-12-04"][value="v"]', { force: true });
+  await p.click('input[name="p-2026-12-04"][value="v"]');
   confere(await p.isDisabled('#pend-salvar') && (await txt(p, '#pend-falta')) === 'Falta 1 resposta.', 'conta as respostas que faltam');
   e = await A.estado(p);
   confere(!e.checkins['2026-12-04'] && !e.checkins['2026-12-05'], 'dia sem resposta não vira vitória nem recaída sozinho');
@@ -192,9 +192,9 @@ async function primeiraAbertura(nav) {
   // três dias fora, com uma recaída no meio (06 venci, 07 recaí, 08 venci)
   await abrirNoDia(p, '2026-12-09');
   confere((await p.$$('.pend')).length === 3, 'três dias pendentes (06, 07 e 08/12)');
-  await p.check('input[name="p-2026-12-06"][value="v"]', { force: true });
-  await p.check('input[name="p-2026-12-07"][value="r"]', { force: true });
-  await p.check('input[name="p-2026-12-08"][value="v"]', { force: true });
+  await p.click('input[name="p-2026-12-06"][value="v"]');
+  await p.click('input[name="p-2026-12-07"][value="r"]');
+  await p.click('input[name="p-2026-12-08"][value="v"]');
   await p.click('#pend-salvar');
   await p.waitForSelector('#b-continuar');
   let c = await A.contas(p);
@@ -278,7 +278,7 @@ async function primeiraAbertura(nav) {
   await p.waitForSelector('#pend-salvar');
   e = await A.estado(p);
   confere(!e.checkins['2026-12-12'] && !e.checkins['2026-12-11'], 'tocar em “Venci hoje” depois da virada não grava no dia errado: o app pergunta pelo dia que passou');
-  await p.check('input[name="p-2026-12-11"][value="v"]', { force: true });
+  await p.click('input[name="p-2026-12-11"][value="v"]');
   await p.click('#pend-salvar');
   await p.waitForSelector('#b-continuar'); await continuarMensagem(p);
   await venci(p); await p.waitForSelector('#b-corrigir-hoje');
@@ -425,7 +425,7 @@ async function reinicioELembrete(nav) {
   await p.waitForSelector('#b-continuar'); await continuarMensagem(p);
   confere(!(await p.isVisible('#lembrete-backup')), 'com 6 dias ainda não lembra');
   await abrirNoDia(p, '2026-12-08');
-  await p.check('input[name="p-2026-12-07"][value="v"]', { force: true }); await p.click('#pend-salvar');
+  await p.click('input[name="p-2026-12-07"][value="v"]'); await p.click('#pend-salvar');
   await p.waitForSelector('#b-continuar'); await continuarMensagem(p);
   confere(await p.isVisible('#lembrete-backup'), 'com 7 dias aparece o lembrete discreto de backup');
   await p.click('[data-acao="backup-depois"]');
@@ -435,7 +435,7 @@ async function reinicioELembrete(nav) {
   await p.waitForSelector('#b-continuar'); await continuarMensagem(p);
   confere(!(await p.isVisible('#lembrete-backup')), '6 dias depois de adiar, ainda escondido');
   await abrirNoDia(p, '2026-12-15');
-  await p.check('input[name="p-2026-12-14"][value="v"]', { force: true }); await p.click('#pend-salvar');
+  await p.click('input[name="p-2026-12-14"][value="v"]'); await p.click('#pend-salvar');
   await p.waitForSelector('#b-continuar'); await continuarMensagem(p);
   confere(await p.isVisible('#lembrete-backup'), '7 dias depois de adiar, o lembrete volta');
   const [d1] = await Promise.all([p.waitForEvent('download'), p.click('#lembrete-backup [data-acao="exportar"]')]);
@@ -543,9 +543,9 @@ async function adiarFuturoEDesfazer(nav) {
   await p.locator('#hist-lista').getByRole('button', { name: 'Responder', exact: true }).first().click();
   await p.waitForSelector('#pend-salvar');
   confere(!(await p.isVisible('dialog')), 'o histórico também leva às perguntas');
-  await p.check('input[name="p-2026-12-04"][value="v"]', { force: true });
-  await p.check('input[name="p-2026-12-05"][value="r"]', { force: true });
-  await p.check('input[name="p-2026-12-06"][value="v"]', { force: true });
+  await p.click('input[name="p-2026-12-04"][value="v"]');
+  await p.click('input[name="p-2026-12-05"][value="r"]');
+  await p.click('input[name="p-2026-12-06"][value="v"]');
   await p.click('#pend-salvar');
   await p.waitForSelector('dialog .festa');
   confere((await txt(p, 'dialog .festa')).includes('Sorvete'), 'ao responder, a recompensa alcançada no período (dia 2) é liberada');
