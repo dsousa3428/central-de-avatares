@@ -17,17 +17,17 @@ QUEDA = ['PSA 145:14', 'ISA 42:3', 'PSA 34:18', '2TI 2:13']
 TENTACAO = ['1CO 10:13', 'JAS 4:7', 'HEB 2:18', 'PSA 46:1', 'PRO 18:10', 'PSA 50:15', '1JN 4:4', 'PSA 61:2-3',
             'HEB 4:15', 'PSA 94:18-19', '2TH 3:3', 'EPH 6:13']
 VITORIA_TENTACAO = ['PSA 124:7']
-RECOMPENSA = ['2CH 15:7', 'PSA 128:2', 'PRO 13:12', 'ECC 3:13', 'PSA 126:3', 'JAS 1:17', 'PSA 118:24', 'MAT 25:21',
+RECOMPENSA = ['2CH 15:7', 'PSA 128:2', 'PRO 13:12', 'ECC 2:24', 'PSA 126:3', 'JAS 1:17', 'PSA 118:24', 'MAT 25:21',
               'PSA 103:2', 'PHP 4:4']
 FINAL = ['2TI 4:7']
-# Reservas (caso alguma acima não fique boa)
+# Reservas: já conferidas e prontas para uso, mas fora do app por enquanto.
 RESERVA = ['PSA 23:4', 'ROM 8:31', 'MAT 24:13', 'PSA 55:22', 'PRO 4:18', 'JHN 16:33', 'PRO 24:10', 'ROM 6:11',
            'PHP 3:12', 'JUD 1:24-25', 'PSA 18:32-33', '1CO 15:57', 'REV 21:5', 'JER 17:7-8', 'PSA 30:11', 'PSA 138:8',
            'PSA 138:3', 'GAL 5:16', 'PSA 25:15', 'NAM 1:7', 'JAS 5:16', 'ECC 4:12', 'PRO 27:17', 'PSA 5:3',
            'JAS 1:12', '1PE 5:8-9', 'PRO 4:14-15', 'COL 3:2', 'PSA 28:7', 'HEB 10:23', 'PSA 31:24', 'PHP 2:13',
-           '1TH 5:24', 'MAT 5:16', '1TH 5:18', '1CO 3:8', 'PSA 37:4', 'PSA 56:3', 'PSA 121:1-2', 'ISA 26:3', '1PE 5:7',
-           'PSA 86:5', '1JN 2:1', 'ISA 1:18', 'ISA 43:25', 'JHN 8:11', 'PSA 103:12', 'PSA 34:17', 'MAT 6:13', 'PSA 1:3',
-           'PSA 1:1-2', 'EPH 4:1', 'ROM 6:18', 'DEU 8:2', 'PSA 27:14', 'PSA 42:11']
+           '1TH 5:24', 'MAT 5:16', '1TH 5:18', '1CO 3:8', 'PSA 37:4', 'PSA 121:1-2', 'ISA 26:3', '1PE 5:7',
+           'PSA 86:5', '1JN 2:1', 'ISA 43:25', 'JHN 8:11', 'PSA 103:12', 'PSA 34:17', 'MAT 6:13', 'PSA 1:3',
+           'PSA 1:1-2', 'EPH 4:1', 'ROM 6:18', 'DEU 8:2', 'PSA 27:14']
 CONJUNTOS = {'fase1': FASE1, 'fase2': FASE2, 'fase3': FASE3, 'fase4': FASE4, 'recomeco': RECOMECO, 'queda': QUEDA,
              'tentacao': TENTACAO, 'vitoria': VITORIA_TENTACAO, 'recompensa': RECOMPENSA, 'final': FINAL,
              'reserva': RESERVA}

@@ -13,3 +13,13 @@ Projeto Gutenberg n.º 62383, pela transcrição estruturada de `mazza/biblia-ar
 - `baixar.py` — baixa o texto de 1911 de cada referência e grava `originais-1911.json` (fica guardado aqui, então
   não é preciso internet para refazer o resto).
 - `fonte.py` — lê o texto original de uma referência (`python3 fonte.py 'JOS 1:9'`).
+- `propor.py` + `decisoes.py` — a edição de 1911 usa a grafia da época (*n’aquelle*, *peccado*, *animo*). Estes dois
+  propõem a escrita de hoje **palavra por palavra** (nunca trocam uma palavra por outra) e mostram o que precisa de
+  decisão. O resultado conferido fica congelado em `grafia.json` (cada troca, uma a uma).
+- `montar.py` — aplica `grafia.json` e grava `versiculos.json` (o texto que vai para o app). Além da grafia, só faz
+  ajustes mecânicos, todos listados na saída: minúscula ao juntar versículos seguidos, maiúscula depois de `?`,
+  ponto final no fim do trecho e o "por que" interrogativo de Neemias 6:3.
+- `conferir_gutenberg.py` — conferência independente: cada versículo extraído tem de aparecer, igual e com o mesmo
+  número, no arquivo bruto do Projeto Gutenberg (`pg62383.txt`, 5 MB, que não fica no repositório).
+
+Nomes próprios raros ficaram como na edição de 1911 (*Mispah*, *Sen*, *Eben-ezer*).
