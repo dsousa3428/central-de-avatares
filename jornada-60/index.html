@@ -1838,8 +1838,12 @@ function precoBR(p) {
   return /^[\d.,\s]+$/.test(p) ? 'R$ ' + p.trim() : p;
 }
 function foneWhats(v) {
-  var d = String(v || '').replace(/\D/g, '').replace(/^0+/, '');
-  if (d.length === 10 || d.length === 11) d = '55' + d;   // número brasileiro sem o código do país
+  var bruto = String(v || '').trim(), comCodigoDoPais = bruto.charAt(0) === '+';
+  var d = bruto.replace(/\D/g, '');
+  if (!comCodigoDoPais) {
+    d = d.replace(/^0+/, '');
+    if (d.length === 10 || d.length === 11) d = '55' + d;   // número brasileiro sem o código do país
+  }
   return d.length >= 10 && d.length <= 15 ? d : '';
 }
 function linkWhats() {
@@ -3376,7 +3380,9 @@ function iniciar() {
       estado: function () { return JSON.parse(JSON.stringify(estado)); },
       banco: function () { return BANCO; },
       calc: function () { var c = calc(); delete c.dias; return c; },
-      util: { somarDias: somarDias, diff: diff, dataValida: dataValida, diaDaSemana: diaDaSemana, calcular: calcular, hojeReal: hojeReal, foneWhats: foneWhats, linkSeguro: linkSeguro, normalizar: normalizar }
+      util: { somarDias: somarDias, diff: diff, dataValida: dataValida, diaDaSemana: diaDaSemana, calcular: calcular, hojeReal: hojeReal, foneWhats: foneWhats, linkSeguro: linkSeguro, normalizar: normalizar },
+      mudarCheckins: mudarCheckins,
+      definirEstado: function (o) { estado = normalizar(o); salvar(); ui.pendentes = {}; diaConhecido = hoje(); ir(telaCerta()); render(); }
     };
   }
   window.JORNADA60_OK = true;
