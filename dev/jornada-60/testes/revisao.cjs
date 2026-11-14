@@ -239,7 +239,7 @@ async function restaurarNaTelaDeErro(nav) {
   await naJanela(p, 'Cancelar');
   confere((await guardado(p)) === novo, 'cancelando, o que estava guardado continua intacto');
   await p.click('#i-restaurar');
-  const [copia] = await Promise.all([p.waitForEvent('download'), naJanela(p, 'Restaurar o backup')]);
+  const [copia] = await Promise.all([p.waitForEvent('download'), naJanela(p, 'Substituir')]);
   confere(fs.readFileSync(await copia.path(), 'utf8') === novo, 'confirmando, o app baixa antes uma cópia dos dados como estavam');
   await p.waitForFunction(() => window.__j60.estado() && window.__j60.estado().perfil.nome === 'Davi');
   confere(JSON.parse(await guardado(p)).perfil.nome === 'Davi', 'e só então restaura o backup');
@@ -321,6 +321,24 @@ async function dadosMudaramPorFora(nav) {
   confere((await guardado(a)) === textoDeB && e.mensagens.dia.vista === true, 'a aba que estava na celebração adota o que a outra gravou, sem regravar o que tinha na memória', e.mensagens.dia);
   confere(await b2.isVisible('#checkin') && !(await b2.isVisible('#b-continuar')), 'e a outra aba continua onde estava (não volta para a mensagem do dia)');
   confere(await a.isVisible('#checkin') && (await txt(a, '#avisos')).includes('mudaram em outra aba') && (await A.contas(a)).seqAtual === 3, 'a primeira aba passa para a tela inicial, com os 3 dias vencidos, e avisa');
+  await contexto.close();
+
+  // 5d-3. o mesmo, fechando a celebração pelo teclado (Esc) sem que a aba tenha sido avisada da mudança
+  ({ contexto, pagina: a, registro } = await abrirCom(nav, '2026-12-04', comPendencia));
+  await a.waitForSelector('#pend-salvar');
+  await a.click('[data-acao="pend-todos"][data-v="v"]');
+  await a.click('#pend-salvar');
+  await a.waitForSelector('dialog .festa');
+  const mudado = JSON.parse(await guardado(a));
+  mudado.tentacoesVencidas = 5;                                  // o que outra aba teria gravado nesse meio-tempo
+  await a.evaluate(([k, v]) => localStorage.setItem(k, v), [CHAVE, JSON.stringify(mudado)]);
+  await a.waitForTimeout(450);                                   // a janela já aceita toques e teclas
+  await a.keyboard.press('Escape');
+  await a.waitForSelector('dialog', { state: 'detached' });
+  await a.waitForTimeout(300);
+  e = JSON.parse(await guardado(a));
+  confere(e.tentacoesVencidas === 5 && (await A.estado(a)).tentacoesVencidas === 5, 'fechar a celebração com Esc não grava por cima do que mudou por fora', e.tentacoesVencidas);
+  confere(registro.erros.length === 0, 'sem erro de script', registro.erros);
   await contexto.close();
 
   // 5e. modo de teste com datas diferentes em duas abas (cada uma quer a mensagem do "seu" dia): sem laço de gravações

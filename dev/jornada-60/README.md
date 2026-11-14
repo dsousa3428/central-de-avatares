@@ -25,7 +25,7 @@ node dev/jornada-60/testes/todos.cjs
 | `revisao.cjs` | os casos achados por uma revisão independente do código: janela de confirmação aberta na virada do dia, toque duplo (o segundo toque não vale no botão que apareceu embaixo do dedo), “Tirar a marcação” de hoje, restaurar backup na tela de dados ilegíveis, dados gravados por outra aba ou por uma versão mais nova, backup adulterado, banco quebrado por um dia |
 | `acessibilidade.cjs` | contraste de cada texto visível (mínimo 4,5:1; 3:1 em texto grande), nome de cada botão e rótulo de cada campo, em 37 telas e janelas |
 | `pasta-com-acentos.cjs` | o arquivo guardado em uma pasta com espaços e acentos abre e salva igual |
-| `fotos.cjs`, `fotos-extra.cjs`, `fotos-entrega.cjs` | não são testes: fotografam as telas (`celular` ou `computador`) em `capturas/` para a conferência visual |
+| `fotos.cjs`, `fotos-extra.cjs`, `fotos-entrega.cjs`, `fotos-revisao.cjs` | não são testes: fotografam as telas (`celular` ou `computador`) em `capturas/` para a conferência visual |
 
 O modo de teste do app (`index.html?hoje=AAAA-MM-DD`) simula a data e usa a chave `jornada60:teste` do
 localStorage; só nesse modo existe `window.__j60` (ganchos usados pelos testes).

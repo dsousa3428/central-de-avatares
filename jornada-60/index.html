@@ -356,6 +356,7 @@ dialog.dlg.sem-modal { position: fixed; inset: 0; margin: auto; z-index: 1000; h
 .dlg-corpo p strong, .dlg-corpo p b { color: var(--text); }
 .dlg-acoes { display: flex; flex-wrap: wrap; gap: 10px; }
 .dlg-acoes .btn { flex: 1 1 140px; }
+.dlg-acoes.empilhar .btn { flex-basis: 100%; }      /* três escolhas: uma por linha, para nenhum texto quebrar */
 .dlg-x { position: absolute; top: 12px; right: 12px; z-index: 2; }
 dialog.dlg.cheio { width: 100vw; height: 100vh; height: 100dvh; max-height: none; border: 0; border-radius: 0; background: var(--bg); }
 dialog.dlg.cheio .dlg-corpo { width: 100%; max-width: 620px; margin: 0 auto; min-height: 100%; align-content: start; padding: 22px 18px calc(22px + env(safe-area-inset-bottom, 0px)); }
@@ -1965,7 +1966,10 @@ function abrir(html, opts) {
     if (!pilha.length && ui.viradaPendente) aoMudarODia();
   };
   d.addEventListener('close', function () { d._encerrar(); });           // Esc ou fechamento pelo navegador
-  d.addEventListener('cancel', function (ev) { if (opts.semEsc) ev.preventDefault(); });
+  d.addEventListener('cancel', function (ev) {
+    if (opts.semEsc) { ev.preventDefault(); return; }
+    adotarSeMudou();      // fechar pelo teclado também confere antes se os dados mudaram por fora (fechar uma janela pode gravar)
+  });
   var apertouNoFundo = false;
   d.addEventListener('mousedown', function (ev) { apertouNoFundo = ev.target === d; });
   d.addEventListener('click', function (ev) { if (ev.target === d && apertouNoFundo && !opts.semFundo && !(ev.detail > 1)) fechar(d, ''); });
@@ -1992,7 +1996,7 @@ function janelaDe(el) { return el.closest('dialog'); }
 function perguntar(o) {
   return new Promise(function (resolver) {
     abrir('<h2>' + esc(o.titulo) + '</h2>' + (o.texto ? '<p>' + esc(o.texto) + '</p>' : '') +
-      '<div class="dlg-acoes">' + o.botoes.map(function (b) {
+      '<div class="dlg-acoes' + (o.botoes.length > 2 ? ' empilhar' : '') + '">' + o.botoes.map(function (b) {
         return '<button type="button" class="btn ' + (b.classe || 'secundario') + '" data-acao="fechar" data-retorno="' + esc(b.valor || '') + '"' +
           (b.foco ? ' data-foco' : '') + '>' + esc(b.texto) + '</button>';
       }).join('') + '</div>', { semX: true, aoFechar: function (ret) { resolver(ret || ''); } });
@@ -2802,7 +2806,7 @@ function receberBackup(txt, form) {
     confirmar({
       titulo: 'Substituir o que está guardado?',
       texto: 'Este navegador tem dados que o app não conseguiu abrir. Eles serão trocados pelo backup de ' + d.perfil.nome + ' (início em ' + dataBR(d.perfil.inicio) + '). Antes, o app baixa uma cópia deles como estão.',
-      sim: 'Restaurar o backup'
+      sim: 'Substituir'
     }).then(function (ok) {
       if (!ok) return;
       baixarTexto('jornada60-dados-como-estao.txt', bruto, 'text/plain');
@@ -3500,8 +3504,8 @@ function iniciar() {
     ui.tela = 'erro';
     render();
   } else {
-    var recarga = false;      // recarregar a aba não prova nada: só conta abrir o app de novo
-    try { var nav = window.performance.getEntriesByType('navigation')[0]; recarga = !!nav && nav.type === 'reload'; } catch (e) { /* sem suporte */ }
+    var recarga = false;      // recarregar a aba (ou voltar pelo histórico) não prova nada: só conta abrir o app de novo
+    try { var nav = window.performance.getEntriesByType('navigation')[0]; recarga = !!nav && nav.type !== 'navigate'; } catch (e) { /* sem suporte */ }
     var reabriuComDados = !!estado.perfil && !estado.salvamentoConferido && !recarga;
     if (reabriuComDados) estado.salvamentoConferido = true;       // os dados sobreviveram a um fechar-e-abrir
     if (estado.perfil && (liberarAlcancadas(calc()).length || reabriuComDados)) salvar();
