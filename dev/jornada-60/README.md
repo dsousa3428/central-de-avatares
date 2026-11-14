@@ -22,7 +22,7 @@ node dev/jornada-60/testes/todos.cjs
 | `mensagens.cjs` | o banco **dentro do `index.html`**: cada versículo igual ao texto conferido, tamanhos, fases, sorteio sem repetição, banco quebrado |
 | `tentacao.cjs` | passo a passo do botão “Estou sendo tentado”, com o relógio controlado nos 90 segundos |
 | `robustez.cjs` | relógio de verdade às 23h30 em São Paulo, dados ilegíveis, navegador que não salva, só teclado, telas de 320–390 px, duas abas |
-| `revisao.cjs` | os casos achados por uma revisão independente do código: janela de confirmação aberta na virada do dia, toque duplo (o segundo toque não vale no botão que apareceu embaixo do dedo), “Tirar a marcação” de hoje, restaurar backup na tela de dados ilegíveis, dados gravados por outra aba ou por uma versão mais nova, backup adulterado, banco quebrado por um dia |
+| `revisao.cjs` | os casos achados por uma revisão independente do código: janela de confirmação aberta na virada do dia, toque duplo (o segundo toque não vale no botão que apareceu embaixo do dedo), “Tirar a marcação” de hoje, restaurar backup na tela de dados ilegíveis, dados gravados por outra aba ou por uma versão mais nova, backup adulterado, banco quebrado por um dia; mais “gravar e reabrir 30 vezes” e duas abas de verdade alternando ações |
 | `acessibilidade.cjs` | contraste de cada texto visível (mínimo 4,5:1; 3:1 em texto grande), nome de cada botão e rótulo de cada campo, em 37 telas e janelas |
 | `pasta-com-acentos.cjs` | o arquivo guardado em uma pasta com espaços e acentos abre e salva igual |
 | `fotos.cjs`, `fotos-extra.cjs`, `fotos-entrega.cjs`, `fotos-revisao.cjs` | não são testes: fotografam as telas (`celular` ou `computador`) em `capturas/` para a conferência visual |

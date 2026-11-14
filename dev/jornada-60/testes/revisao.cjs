@@ -463,8 +463,68 @@ async function gravarEReabrir(nav) {
   await contexto.close();
 }
 
+async function duasAbasAlternando(nav) {
+  console.log('\n9. Duas abas de verdade, uma ação de cada vez: nada do que uma fez se perde na outra');
+  const { contexto, pagina: a, registro } = await abrirCom(nav, '2026-12-06', estadoBase({ checkins: vencidos('2026-12-01', 5) }));
+  await passarMensagem(a);
+  const outra = await abrirCom(nav, '2026-12-06', null, null, contexto);
+  const b = outra.pagina;
+  await b.waitForSelector('#checkin');
+  const HOJE = '2026-12-06';
+  // espera as duas abas ficarem com os mesmos dados que estão guardados e devolve esses dados
+  const resumo = (o) => JSON.stringify({ n: o.perfil.nome, ck: o.checkins, r: o.recompensas.map((x) => x.nome + '@' + x.dia + (x.resgatadaEm ? '!' : '')), t: o.tentacoesVencidas });
+  const assentar = async () => {
+    let g = null;
+    for (let i = 0; i < 20; i++) {
+      await a.waitForTimeout(100);
+      g = JSON.parse(await guardado(a));
+      if (resumo(await A.estado(a)) === resumo(g) && resumo(await A.estado(b)) === resumo(g)) return g;
+    }
+    return null;
+  };
+  const novaRecompensa = async (p, dia, nome) => {
+    await p.click('#b-premio-novo');
+    await p.fill('#p-dia', String(dia)); await p.fill('#p-nome', nome);
+    await p.click('#p-salvar'); await semJanela(p);
+  };
+  const venceuTentacao = async (p) => {
+    await p.click('#b-sos');
+    for (let i = 1; i < 6; i++) await p.click(i === 2 ? '#sos-pular' : '#sos-proximo');
+    await p.click('#sos-venci'); await p.click('#sos-fim'); await semJanela(p);
+  };
+
+  await novaRecompensa(a, 10, 'R1');
+  let g = await assentar();
+  confere(!!g && g.recompensas.length === 1 && await b.isVisible('text=R1'), 'A cadastra uma recompensa → B mostra a recompensa');
+  await novaRecompensa(b, 20, 'R2');
+  g = await assentar();
+  confere(!!g && g.recompensas.map((x) => x.nome).sort().join() === 'R1,R2', 'B cadastra outra → as duas estão guardadas (a de A não sumiu)', g && g.recompensas.map((x) => x.nome));
+  await a.click('#b-venci'); await a.waitForSelector('#b-corrigir-hoje');
+  g = await assentar();
+  confere(!!g && g.checkins[HOJE] === 'v' && await b.isVisible('#b-corrigir-hoje') && (await A.contas(b)).seqAtual === 6, 'A marca “Venci hoje” → B mostra o dia vencido e a sequência 6');
+  await b.click('#b-corrigir-hoje'); await naJanela(b, 'Tirar a marcação'); await semJanela(b);
+  g = await assentar();
+  confere(!!g && !g.checkins[HOJE] && g.recompensas.length === 2 && await a.isVisible('#b-venci'), 'B tira a marcação → A volta a oferecer o check-in; as recompensas continuam');
+  await venceuTentacao(a);
+  g = await assentar();
+  confere(!!g && g.tentacoesVencidas === 1 && (await A.estado(b)).tentacoesVencidas === 1, 'A vence uma tentação → o contador aparece em B');
+  await novaRecompensa(b, 30, 'R3');
+  await venceuTentacao(b);
+  g = await assentar();
+  confere(!!g && g.recompensas.length === 3 && g.tentacoesVencidas === 2 && !g.checkins[HOJE], 'B cadastra mais uma e vence outra tentação → 3 recompensas, contador 2, nada perdido', g && { r: g.recompensas.length, t: g.tentacoesVencidas });
+  await a.click('#b-venci'); await a.waitForSelector('#b-corrigir-hoje');
+  await assentar();
+  await b.click('#b-ajustes'); await b.fill('#a-nome', 'Davi Dois'); await b.click('#a-salvar'); await semJanela(b);
+  g = await assentar();
+  confere(!!g && g.perfil.nome === 'Davi Dois' && g.checkins[HOJE] === 'v' && g.recompensas.length === 3 && g.tentacoesVencidas === 2 && Object.keys(g.checkins).length === 6,
+    'A marca o dia e B troca o nome nos ajustes → o guardado tem tudo: nome novo, 6 dias vencidos, 3 recompensas, contador 2', g && { n: g.perfil.nome, ck: Object.keys(g.checkins).length, r: g.recompensas.length, t: g.tentacoesVencidas });
+  confere((await txt(a, '.saudacao')).includes('Davi Dois'), 'e a tela de A já mostra o nome novo');
+  confere(registro.erros.length === 0 && outra.registro.erros.length === 0, 'sem erro de script nas duas abas', [registro.erros, outra.registro.erros]);
+  await contexto.close();
+}
+
 (async () => {
-  const grupos = [confirmacaoNaVirada, toqueDuplo, tirarAMarcacao, restaurarNaTelaDeErro, dadosMudaramPorFora, backupAdulteradoEBancoQuebrado, conferenciaDeSalvamento, gravarEReabrir];
+  const grupos = [confirmacaoNaVirada, toqueDuplo, tirarAMarcacao, restaurarNaTelaDeErro, dadosMudaramPorFora, backupAdulteradoEBancoQuebrado, conferenciaDeSalvamento, gravarEReabrir, duasAbasAlternando];
   const so = Number(process.argv[2]) || 0;
   const nav = await A.novoNavegador();
   try {
