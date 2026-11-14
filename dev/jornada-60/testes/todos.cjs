@@ -3,7 +3,7 @@
 const { spawnSync } = require('child_process');
 const path = require('path');
 
-const arquivos = ['contas.cjs', 'fluxos.cjs', 'mensagens.cjs', 'tentacao.cjs', 'robustez.cjs'];
+const arquivos = ['contas.cjs', 'fluxos.cjs', 'mensagens.cjs', 'tentacao.cjs', 'robustez.cjs', 'acessibilidade.cjs'];
 let falhou = 0, total = 0;
 for (const a of arquivos) {
   const r = spawnSync(process.execPath, [path.join(__dirname, a)], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });

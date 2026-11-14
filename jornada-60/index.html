@@ -37,7 +37,7 @@
   --amber-soft: rgba(251, 191, 36, .12);
   --violet: #a78bfa;
   --violet-cell: #8b7be0;
-  --violet-soft: rgba(167, 139, 250, .14);
+  --violet-soft: rgba(167, 139, 250, .14); --violet-ink: #140c2e;
   --coral: #fb7185;
   --coral-ink: #2b0a12;
   --future: #222b3a;
@@ -193,8 +193,8 @@ input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--green); 
 .checkin .acoes { display: grid; gap: 10px; margin-top: 14px; }
 .checkin.feito { display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: center; }
 .checkin.feito .selo { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; font-size: 1.5rem; font-weight: 800; }
-.checkin.feito.v .selo { background: var(--green-cell); color: #fff; animation: pop .45s cubic-bezier(.2, 1.4, .4, 1) both; }
-.checkin.feito.r .selo { background: var(--violet-cell); color: #fff; }
+.checkin.feito.v .selo { background: var(--green-cell); color: var(--green-ink); animation: pop .45s cubic-bezier(.2, 1.4, .4, 1) both; }
+.checkin.feito.r .selo { background: var(--violet-cell); color: var(--violet-ink); }
 .checkin.feito .corrigir { grid-column: 1 / -1; justify-self: start; }
 .checkin.feito p { color: var(--text-2); font-size: .95rem; }
 @keyframes pop { from { transform: scale(.4); opacity: 0; } to { transform: none; opacity: 1; } }
@@ -228,15 +228,15 @@ input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--green); 
 button.cel { cursor: pointer; width: 100%; }
 button.cel:hover { filter: brightness(1.12); }
 .trilha > li:not(.cel) { display: grid; }
-.cel .n { position: absolute; top: 4px; left: 6px; font-size: .66rem; font-weight: 700; opacity: .9; }
+.cel .n { position: absolute; top: 4px; left: 6px; font-size: .66rem; font-weight: 700; }
 .cel .i { font-size: 1.05rem; }
 .cel .premio { position: absolute; right: 3px; bottom: 2px; font-size: .78rem; line-height: 1; }
-.cel.v { background: var(--green-cell); color: #fff; }
-.cel.r { background: var(--violet-cell); color: #fff; }
+.cel.v { background: var(--green-cell); color: var(--green-ink); }
+.cel.r { background: var(--violet-cell); color: var(--violet-ink); }
 .cel.p { background: var(--amber-cell); color: var(--amber-ink); }
 .cel.tem-premio:not(.v):not(.r):not(.p) { background: #2b3040; box-shadow: inset 0 0 0 1.5px rgba(251, 191, 36, .55); }
 .cel.tem-premio .i { font-size: 1.2rem; }
-.cel.hoje { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--text); color: var(--text); }
+.cel.hoje { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--text); } .cel.hoje:not(.v):not(.r):not(.p) { color: var(--text); }
 .cel.hoje.aberto { animation: pulso 2.2s ease-in-out infinite; }
 @keyframes pulso { 0%, 100% { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--text); } 50% { box-shadow: 0 0 0 2px var(--surface), 0 0 0 7px rgba(238, 242, 247, .35); } }
 .anteriores { margin-top: 14px; padding: 12px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); }
@@ -247,8 +247,8 @@ button.cel:hover { filter: brightness(1.12); }
 .legenda { display: flex; flex-wrap: wrap; gap: 8px 14px; margin-top: 14px; color: var(--text-2); font-size: .82rem; }
 .legenda li { display: inline-flex; align-items: center; gap: 6px; }
 .legenda .am { width: 18px; height: 18px; border-radius: 5px; display: inline-grid; place-items: center; font-size: .7rem; font-weight: 800; background: var(--future); color: var(--muted); }
-.legenda .am.v { background: var(--green-cell); color: #fff; }
-.legenda .am.r { background: var(--violet-cell); color: #fff; }
+.legenda .am.v { background: var(--green-cell); color: var(--green-ink); }
+.legenda .am.r { background: var(--violet-cell); color: var(--violet-ink); }
 .legenda .am.p { background: var(--amber-cell); color: var(--amber-ink); }
 .legenda .am.hoje { box-shadow: 0 0 0 1.5px var(--surface), 0 0 0 3px var(--text); width: 14px; height: 14px; margin: 0 2px; }
 .legenda .am.g { background: #2b3040; box-shadow: inset 0 0 0 1.5px rgba(251, 191, 36, .55); font-size: .66rem; }
@@ -330,8 +330,8 @@ button.cel:hover { filter: brightness(1.12); }
 .seg input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
 .seg span { display: grid; place-items: center; min-height: 46px; padding: 8px 14px; border-radius: 12px; border: 1px solid var(--line-2); font-weight: 700; font-size: .95rem; color: var(--text-2); transition: background-color .15s ease, color .15s ease, border-color .15s ease; }
 .seg input:focus-visible + span { outline: 3px solid var(--focus); outline-offset: 2px; }
-.seg input:checked + span.v { background: var(--green-cell); border-color: var(--green-cell); color: #fff; }
-.seg input:checked + span.r { background: var(--violet-cell); border-color: var(--violet-cell); color: #fff; }
+.seg input:checked + span.v { background: var(--green-cell); border-color: var(--green-cell); color: var(--green-ink); }
+.seg input:checked + span.r { background: var(--violet-cell); border-color: var(--violet-cell); color: var(--violet-ink); }
 .atalhos { display: flex; flex-wrap: wrap; gap: 8px; }
 
 /* ---------- Janelas (dialog) ---------- */
@@ -366,8 +366,8 @@ dialog.dlg.cheio .dlg-corpo { width: 100%; max-width: 620px; margin: 0 auto; min
 .hist { display: grid; gap: 6px; }
 .hist li { display: grid; grid-template-columns: 34px 1fr auto; gap: 10px; align-items: center; padding: 8px 10px; border-radius: 12px; background: var(--surface-2); }
 .hist .bol { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; font-weight: 800; font-size: .9rem; background: var(--future); color: var(--muted); }
-.hist .bol.v { background: var(--green-cell); color: #fff; }
-.hist .bol.r { background: var(--violet-cell); color: #fff; }
+.hist .bol.v { background: var(--green-cell); color: var(--green-ink); }
+.hist .bol.r { background: var(--violet-cell); color: var(--violet-ink); }
 .hist .bol.p { background: var(--amber-cell); color: var(--amber-ink); }
 .hist b { display: block; font-size: .95rem; }
 .hist span.oque { color: var(--text-2); font-size: .85rem; }
@@ -1933,7 +1933,7 @@ function abrir(html, opts) {
   d.innerHTML = (opts.semX ? '' : '<button type="button" class="icone-btn dlg-x" data-acao="fechar" aria-label="Fechar">' + IC.x + '</button>') +
     '<div class="dlg-corpo">' + html + '</div>';
   var titulo = d.querySelector('h2');
-  if (titulo) { titulo.id = 't-' + novoId(); d.setAttribute('aria-labelledby', titulo.id); }
+  if (titulo) { titulo.id = 't-' + novoId(); d.setAttribute('aria-labelledby', titulo.id); } else if (opts.rotulo) d.setAttribute('aria-label', opts.rotulo);
   document.body.appendChild(d);
   var focoAntes = document.activeElement;
   var encerrado = false;
@@ -2791,7 +2791,7 @@ function abrirSOS() {
   var e = sortear('tentacao');
   salvar();
   sos = { passo: 1, entrada: e, respirando: false, terminou: false, editando: false, escolhida: -1, relogio: 0, inicio: 0, fase: '', conf: null, d: null };
-  sos.d = abrir('<div id="sos-miolo"></div>', { classe: 'cheio', semFundo: true, aoFechar: function () { pararRespiro(); if (sos && sos.conf) sos.conf.parar(); sos = null; } });
+  sos.d = abrir('<div id="sos-miolo"></div>', { classe: 'cheio', rotulo: 'Estou sendo tentado: passo a passo', semFundo: true, aoFechar: function () { pararRespiro(); if (sos && sos.conf) sos.conf.parar(); sos = null; } });
   renderSOS();
 }
 function peSOS(voltar, proximo, rotulo) {
