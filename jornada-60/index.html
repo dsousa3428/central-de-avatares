@@ -225,7 +225,9 @@ input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--green); 
   border-radius: 10px; background: var(--future); color: var(--muted);
   font-weight: 700; font-size: .95rem; line-height: 1;
 }
-button.cel { cursor: pointer; }
+button.cel { cursor: pointer; width: 100%; }
+button.cel:hover { filter: brightness(1.12); }
+.trilha > li:not(.cel) { display: grid; }
 .cel .n { position: absolute; top: 4px; left: 6px; font-size: .66rem; font-weight: 700; opacity: .9; }
 .cel .i { font-size: 1.05rem; }
 .cel .premio { position: absolute; right: 3px; bottom: 2px; font-size: .78rem; line-height: 1; }
@@ -371,7 +373,7 @@ dialog.dlg.cheio .dlg-corpo { width: 100%; max-width: 620px; margin: 0 auto; min
 .hist span.oque { color: var(--text-2); font-size: .85rem; }
 
 /* ---------- Passo a passo da tentação ---------- */
-.sos-topo { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.sos-topo { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 40px; padding-right: 56px; }
 .sos-topo .pontos { display: flex; gap: 6px; }
 .sos-topo .pontos i { width: 26px; height: 6px; border-radius: 999px; background: var(--surface-3); }
 .sos-topo .pontos i.on { background: var(--coral); }
@@ -1476,7 +1478,8 @@ function estadoNovo() {
     tentacoesVencidas: 0,
     mensagens: { vistas: {}, dia: null },
     backup: { ultimoEm: null, lembreteEm: null },
-    finalVistoEm: null
+    finalVistoEm: null,
+    salvamentoConferido: false   // vira true quando o app é reaberto e encontra os dados guardados
   };
 }
 
@@ -1583,6 +1586,7 @@ function normalizar(o) {
   var b = o.backup && typeof o.backup === 'object' ? o.backup : {};
   e.backup = { ultimoEm: dataOuNula(b.ultimoEm), lembreteEm: dataOuNula(b.lembreteEm) };
   e.finalVistoEm = dataOuNula(o.finalVistoEm);
+  e.salvamentoConferido = o.salvamentoConferido === true;
   return e;
 }
 
@@ -1897,7 +1901,7 @@ var IC = {
 };
 var LOGO = '<svg class="logo" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><rect width="64" height="64" rx="14" fill="#141922"/><circle cx="32" cy="32" r="18" fill="none" stroke="#16392c" stroke-width="7"/><path d="M32 14a18 18 0 0 1 15.6 27" fill="none" stroke="#34d399" stroke-width="7" stroke-linecap="round"/></svg>';
 
-var ui = { tela: null, verInicio: false, pendentes: {}, viradaPendente: false, anel: 0 };
+var ui = { tela: null, verInicio: false, pendentes: {}, adiouPendentes: false, viradaPendente: false, anel: 0 };
 var pilha = [];          // janelas abertas, da mais antiga para a mais nova
 var diaConhecido = null; // o "hoje" que a tela está mostrando
 
@@ -2074,6 +2078,12 @@ function faixasDeAviso() {
   if (problemaNoBanco) h += '<div class="faixa atencao" role="alert"><p>' + esc(problemaNoBanco) + '</p></div>';
   return h;
 }
+// Até o app ser reaberto uma vez com os dados no lugar, convida a pessoa a fazer esse teste.
+function dicaDeSalvamento() {
+  if (estado.salvamentoConferido || semArmazenamento || falhaAoSalvar) return '';
+  return '<div class="faixa" id="dica-salvar"><p><b>Só para garantir:</b> feche esta aba e abra o app de novo. Se ele lembrar de você, ' +
+    'este navegador está guardando o seu progresso (este aviso some sozinho).</p></div>';
+}
 function lembreteDeBackup() {
   var b = estado.backup, base = estado.criadoEm;
   if (b.ultimoEm && b.ultimoEm > base) base = b.ultimoEm;
@@ -2088,6 +2098,7 @@ function lembreteDeBackup() {
 function rotuloDia(c) {
   if (c.concluidaEm) return 'Jornada concluída: ' + META + ' de ' + META;
   if (c.naoComecou) return 'Começa em ' + dataBR(estado.perfil.inicio);
+  if (c.pendentes.length) return qtd(c.pendentes.length, 'dia pendente', 'dias pendentes');
   if (c.hojeSt === 'r') return 'Amanhã: Dia 1 de ' + META;
   return 'Dia ' + c.diaX + ' de ' + META;
 }
@@ -2140,6 +2151,12 @@ function cardCheckin(c) {
     return '<section class="card checkin" id="checkin"><h2 id="checkin-titulo" tabindex="-1">Sua jornada ainda não começou</h2>' +
       '<p class="apoio">O dia 1 é ' + esc(dataExtenso(estado.perfil.inicio)) + ' (' + (faltam === 1 ? 'amanhã' : 'em ' + faltam + ' dias') + ').</p></section>';
   }
+  if (c.pendentes.length) {
+    return '<section class="card checkin" id="checkin"><h2 id="checkin-titulo" tabindex="-1">Antes do check-in de hoje</h2>' +
+      '<p class="apoio">' + (c.pendentes.length === 1 ? 'Há 1 dia sem registro.' : 'Há ' + c.pendentes.length + ' dias sem registro.') +
+      ' Conte como ' + (c.pendentes.length === 1 ? 'foi' : 'foram') + ' para liberar o check-in de hoje e a mensagem do dia.</p>' +
+      '<div class="acoes" style="grid-template-columns:1fr"><button type="button" class="btn ouro grande" id="b-pend-agora" data-acao="pend-agora">Responder agora' + IC.seta + '</button></div></section>';
+  }
   if (c.hojeSt === 'v') {
     return '<section class="card checkin feito v" id="checkin"><div class="selo">' + IC.check + '</div><div><h2 id="checkin-titulo" tabindex="-1">Hoje está vencido</h2>' +
       '<p>Dia ' + c.seqAtual + ' concluído. Descanse bem: amanhã tem mais.</p></div>' +
@@ -2170,10 +2187,10 @@ function cardMensagem() {
   return '<section class="card" id="mensagem-do-dia"><h2>Mensagem de hoje</h2>' + blocoMensagem(e, missao) + '</section>';
 }
 function celula(o) {
-  // o: { n, data, classe, icone, premio, rotulo, clicavel, mostrarN }
+  // o: { n, data, classe, icone, premio, rotulo, clicavel, acao, mostrarN }
   var dentro = (o.mostrarN ? '<span class="n">' + o.n + '</span>' : '') + '<span class="i">' + o.icone + '</span>' + (o.premio ? '<span class="premio">' + esc(o.premio) + '</span>' : '');
   if (o.clicavel) {
-    return '<li><button type="button" class="cel ' + o.classe + '" tabindex="-1" data-acao="cel" data-data="' + o.data + '" title="' + esc(o.rotulo) + '" aria-label="' + esc(o.rotulo) + '">' + dentro + '</button></li>';
+    return '<li><button type="button" class="cel ' + o.classe + '" tabindex="-1" data-acao="' + (o.acao || 'cel') + '" data-data="' + o.data + '" title="' + esc(o.rotulo) + '" aria-label="' + esc(o.rotulo) + '">' + dentro + '</button></li>';
   }
   return '<li class="cel ' + o.classe + '" title="' + esc(o.rotulo) + '" aria-label="' + esc(o.rotulo) + '">' + dentro + '</li>';
 }
@@ -2185,14 +2202,14 @@ function cardTrilha(c) {
     var premios = premiosDoDia(k), bloqueados = premios.filter(function (r) { return !r.liberadaEm; });
     var emoji = premios.length ? (bloqueados[0] || premios[0]).emoji : '';
     var nomes = premios.map(function (r) { return r.nome + (r.liberadaEm ? ' (liberada)' : ' (bloqueada)'); }).join(', ');
-    var classe, icone, rot = 'Dia ' + k + ', ' + dataCurta(data) + ': ', premio = '', mostrarN = true, clicavel = false;
+    var classe, icone, rot = 'Dia ' + k + ', ' + dataCurta(data) + ': ', premio = '', mostrarN = true, clicavel = false, acao = 'cel';
     if (st === 'v') { classe = 'v'; icone = '✓'; rot += 'vencido'; premio = emoji; clicavel = true; }
-    else if (data < h && !c.naoComecou) { classe = 'p'; icone = '?'; rot += 'pendente'; premio = emoji; }
+    else if (data < h && !c.naoComecou) { classe = 'p'; icone = '?'; rot += 'pendente (toque para responder)'; premio = emoji; clicavel = true; acao = 'pend-agora'; }
     else if (data === h && !c.concluidaEm) { classe = 'hoje aberto'; icone = emoji || String(k); rot += 'hoje'; mostrarN = !!emoji; }
     else { classe = 'f'; icone = emoji || String(k); rot += 'ainda por vir'; mostrarN = !!emoji; }
     if (data === h && st === 'v') { classe += ' hoje'; rot += ' (hoje)'; }
     if (premios.length) { classe += ' tem-premio'; rot += ' — recompensa: ' + nomes; }
-    itens += celula({ n: k, data: data, classe: classe, icone: esc(icone), premio: premio, rotulo: rot, clicavel: clicavel, mostrarN: mostrarN });
+    itens += celula({ n: k, data: data, classe: classe, icone: esc(icone), premio: premio, rotulo: rot, clicavel: clicavel, acao: acao, mostrarN: mostrarN });
   }
   // dias anteriores à sequência atual (tentativas passadas)
   var antes = c.dias.filter(function (d) { return d.data < c.inicioSeq; });
@@ -2203,7 +2220,7 @@ function cardTrilha(c) {
       var cl = d.st === 'v' ? 'v' : d.st === 'r' ? 'r' : 'p';
       var ic = d.st === 'v' ? '✓' : d.st === 'r' ? '↺' : '?';
       var rt = dataCurta(d.data) + ': ' + (d.st === 'v' ? 'vencido' : d.st === 'r' ? 'recaída' : 'pendente') + (d.data === h ? ' (hoje)' : '');
-      cels += celula({ n: 0, data: d.data, classe: cl + (d.data === h ? ' hoje' : ''), icone: ic, rotulo: rt, clicavel: !!d.st, mostrarN: false });
+      cels += celula({ n: 0, data: d.data, classe: cl + (d.data === h ? ' hoje' : ''), icone: ic, rotulo: rt, clicavel: true, acao: d.st ? 'cel' : 'pend-agora', mostrarN: false });
     });
     blocoAntes = '<div class="anteriores"><div class="cab"><span>Antes desta sequência: ' + qtd(antes.length, 'dia', 'dias') +
       (antes.length > mostrar.length ? ' (os ' + mostrar.length + ' mais recentes)' : '') + '</span></div>' +
@@ -2211,7 +2228,7 @@ function cardTrilha(c) {
   }
   return '<section class="card" id="trilha"><div class="titulo-linha"><h2>Trilha dos ' + META + ' dias</h2>' +
     '<button type="button" class="btn pequeno fantasma" id="b-historico" data-acao="historico">' + IC.historico + 'Histórico</button></div>' +
-    '<p class="apoio">' + (c.hojeSt === 'r' ? 'A nova sequência começa amanhã.' : 'A sua sequência atual, dia a dia.') + '</p>' +
+    '<p class="apoio">' + (c.hojeSt === 'r' ? 'A nova sequência começa amanhã.' : c.pendentes.length ? 'Os dias com “?” ainda estão sem resposta.' : 'A sua sequência atual, dia a dia.') + '</p>' +
     '<ul class="trilha" aria-label="Trilha da sequência atual">' + itens + '</ul>' + blocoAntes +
     '<ul class="legenda" aria-label="Legenda">' +
     '<li><span class="am v">✓</span>Vencido</li><li><span class="am r">↺</span>Recaída</li><li><span class="am p">?</span>Pendente</li>' +
@@ -2276,7 +2293,7 @@ function telaInicio() {
     '<button type="button" class="icone-btn" id="b-ajustes" data-acao="ajustes" aria-label="Ajustes e backup">' + IC.engrenagem + '</button></header>' +
     '<div class="cabecalho"><h1 class="saudacao" id="titulo" tabindex="-1">' + saudacao() + ', ' + esc(p.nome) + '</h1>' +
     '<p class="sub"><b>' + esc(rotuloDia(c)) + '</b> · ' + esc(dataMedia(hoje())) + '</p></div>' +
-    faixasDeAviso() + lembreteDeBackup() +
+    faixasDeAviso() + dicaDeSalvamento() + lembreteDeBackup() +
     '<div class="grade"><div class="col">' + cardHeroi(c) + cardCheckin(c) + cardMensagem() + '</div>' +
     '<div class="col">' + cardTrilha(c) + cardNumeros(c) + '</div></div>' +
     secaoPremios(c) +
@@ -2319,7 +2336,9 @@ function telaPendentes() {
       '<button type="button" class="btn pequeno fantasma" data-acao="pend-todos" data-v="">Limpar</button></div>' : '') +
     '<ol class="pend-lista">' + linhas + '</ol>' +
     '<p class="dica" id="pend-falta" style="margin:12px 0" aria-live="polite"></p>' +
-    '<button type="submit" class="btn primario grande" id="pend-salvar">Salvar e continuar' + IC.seta + '</button></form></div>';
+    '<button type="submit" class="btn primario grande" id="pend-salvar">Salvar e continuar' + IC.seta + '</button>' +
+    '<button type="button" class="btn fantasma largo" id="pend-depois" data-acao="pend-depois" style="margin-top:10px">Responder depois</button>' +
+    '<p class="dica" style="margin-top:8px">Se deixar para depois, o check-in de hoje fica travado até você responder.</p></form></div>';
 }
 function atualizarPendentes() {
   var c = calc(), falta = c.pendentes.filter(function (d) { return !ui.pendentes[d]; }).length;
@@ -2614,7 +2633,8 @@ function htmlHistorico() {
     var ic = d.st === 'v' ? '✓' : d.st === 'r' ? '↺' : (ehHoje ? '•' : '?');
     var oque = d.st === 'v' ? 'Venci · ' + qtd(d.seq, 'dia seguido', 'dias seguidos') : d.st === 'r' ? 'Recaí · a sequência voltou a zero' : (ehHoje ? 'Ainda sem check-in' : 'Pendente');
     return '<li><span class="bol ' + cl + '" aria-hidden="true">' + ic + '</span><div><b>' + esc(dataMedia(d.data)) + (ehHoje ? ' (hoje)' : '') + '</b><span class="oque">' + oque + '</span></div>' +
-      (d.st ? '<button type="button" class="btn pequeno fantasma" data-acao="corrigir" data-data="' + d.data + '">Corrigir</button>' : '<span></span>') + '</li>';
+      (d.st ? '<button type="button" class="btn pequeno fantasma" data-acao="corrigir" data-data="' + d.data + '">Corrigir</button>'
+        : (ehHoje ? '<span></span>' : '<button type="button" class="btn pequeno secundario" data-acao="pend-agora">Responder</button>')) + '</li>';
   }).join('');
 }
 function abrirHistorico() {
@@ -2637,7 +2657,7 @@ function corrigirDia(data) {
     var lista = $('#hist-lista');
     if (lista) lista.innerHTML = htmlHistorico();
     var destino = telaCerta();
-    if (destino !== ui.tela) { if (destino === 'final') fecharTodas(); ir(destino); } else render();
+    if (destino !== ui.tela) { fecharTodas(); ir(destino); } else render();
     if (res.novas.length) abrirFesta(res.novas, res.depois, null);
     else if (ehHoje && novo === 'r') abrirGraca(res.depois);
     else avisar('Corrigido. Sequência atual: ' + qtd(res.depois.seqAtual, 'dia', 'dias') + '.');
@@ -2716,12 +2736,13 @@ function abrirImportar() {
 function aplicarBackup(dados) {
   estado = dados;
   estado.rascunho = null;
+  estado.salvamentoConferido = false;
   erroDeCarga = null;
   liberarAlcancadas(calc());
   salvar();
   pedirArmazenamentoDuravel();
   fecharTodas();
-  ui.verInicio = false; ui.pendentes = {}; ui.viradaPendente = false;
+  ui.verInicio = false; ui.pendentes = {}; ui.adiouPendentes = false; ui.viradaPendente = false;
   diaConhecido = hoje();
   ir(telaCerta());
   avisar('Backup restaurado.');
@@ -2932,7 +2953,8 @@ function telaCerta() {
   var c = calc();
   if (c.concluidaEm) return ui.verInicio ? 'inicio' : 'final';
   if (c.naoComecou) return 'inicio';
-  if (c.pendentes.length) return 'pendentes';      // antes do check-in de hoje, os dias sem resposta
+  // dias sem resposta vêm antes do check-in de hoje; dá para adiar, mas o check-in fica travado até responder
+  if (c.pendentes.length) return ui.adiouPendentes ? 'inicio' : 'pendentes';
   return garantirMensagem(c).vista ? 'inicio' : 'mensagem';
 }
 function ir(tela) {
@@ -2958,6 +2980,7 @@ function aoMudarODia() {
   ui.viradaPendente = false;
   ui.verInicio = false;
   ui.pendentes = {};
+  ui.adiouPendentes = false;
   if (ui.tela === 'config') { lerPasso(); render(); return; }
   ir(telaCerta());
 }
@@ -3030,12 +3053,15 @@ ACOES['pend-todos'] = function (el) {
   $$('.pend input[type="radio"]').forEach(function (r) { r.checked = !!v && r.value === v; });
   atualizarPendentes();
 };
+ACOES['pend-depois'] = function () { ui.adiouPendentes = true; ir(telaCerta()); };
+ACOES['pend-agora'] = function () { fecharTodas(); ui.adiouPendentes = false; ir(telaCerta()); };
 FORMS.pendentes = function () {
   if (virou()) return;
   var c = calc(), lista = c.pendentes, respostas = ui.pendentes;
   if (lista.some(function (d) { return !respostas[d]; })) { atualizarPendentes(); return; }
   var res = mudarCheckins(function (ck) { lista.forEach(function (d) { ck[d] = respostas[d]; }); });
   ui.pendentes = {};
+  ui.adiouPendentes = false;
   var seguir = function () { ir(telaCerta()); };
   if (res.novas.length) abrirFesta(res.novas, res.depois, seguir);
   else seguir();
@@ -3232,10 +3258,11 @@ FORMS.reiniciar = function (form) {
     });
     novo.saidas = velho.saidas.slice();
   }
+  novo.salvamentoConferido = velho.salvamentoConferido;
   estado = novo;
   salvar();
   fecharTodas();
-  ui.verInicio = false; ui.pendentes = {}; ui.viradaPendente = false;
+  ui.verInicio = false; ui.pendentes = {}; ui.adiouPendentes = false; ui.viradaPendente = false;
   ir(telaCerta());
   avisar(manter ? 'Jornada reiniciada. Hoje é o Dia 1.' : 'Tudo apagado. Vamos configurar de novo.');
 };
@@ -3352,7 +3379,7 @@ window.addEventListener('storage', function (ev) {
   ultimoGravado = ev.newValue;
   erroDeCarga = null;
   fecharTodas();
-  ui.pendentes = {}; ui.viradaPendente = false;
+  ui.pendentes = {}; ui.adiouPendentes = false; ui.viradaPendente = false;
   diaConhecido = hoje();
   ir(telaCerta());
   render();
@@ -3369,8 +3396,11 @@ function iniciar() {
     ui.tela = 'erro';
     render();
   } else {
-    if (estado.perfil && liberarAlcancadas(calc()).length) salvar();
+    var reabriuComDados = !!estado.perfil && !estado.salvamentoConferido;
+    if (reabriuComDados) estado.salvamentoConferido = true;       // os dados sobreviveram a um fechar-e-abrir
+    if (estado.perfil && (liberarAlcancadas(calc()).length || reabriuComDados)) salvar();
     ir(telaCerta());
+    if (reabriuComDados && !falhaAoSalvar) avisar('Tudo certo: este navegador está guardando o seu progresso.');
   }
   if (MODO_TESTE) {
     // ganchos usados só pelos testes automáticos

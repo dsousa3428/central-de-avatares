@@ -498,12 +498,87 @@ async function reinicioELembrete(nav) {
   await contexto.close();
 }
 
+async function adiarFuturoEDesfazer(nav) {
+  console.log('\n13. “Responder depois”, início no futuro e conclusão desfeita por correção');
+  const { contexto, pagina: p, registro } = await A.novaPagina(nav);
+  await abrirNoDia(p, '2026-12-01');
+  await A.configurar(p, { nome: 'Lia', inicio: '2026-12-03', recompensas: [{ dia: 2, nome: 'Sorvete', emoji: '🍦' }] });
+  await p.waitForSelector('#checkin');
+  confere((await txt(p, '#checkin')).includes('ainda não começou') && (await txt(p, '#checkin')).includes('em 2 dias'), 'início no futuro: a tela avisa que a jornada ainda não começou');
+  confere(!(await p.isVisible('#b-venci')) && !(await p.isVisible('#mensagem-do-dia')) && await p.isVisible('#b-sos'), 'sem check-in nem mensagem antes do dia 1; botão de tentação disponível');
+  confere((await p.$$(TRILHA + ' button')).length === 0 && (await txt(p, '#numeros')).includes('31 de janeiro de 2027'), 'trilha toda por vir e dia 60 previsto a partir do início');
+  confere(await p.isVisible('#dica-salvar'), 'logo depois de configurar, o app convida a conferir se o navegador guarda os dados');
+  await p.click('#b-sos'); await p.keyboard.press('Escape'); await semJanela(p);
+  await abrirNoDia(p, '2026-12-03');
+  confere(await txt(p, '#msg-dia') === 'Dia 1 de 60', 'no dia marcado, começa o Dia 1');
+  await continuarMensagem(p);
+  confere(!(await p.isVisible('#dica-salvar')), 'ao reabrir e achar os dados, o convite some sozinho');
+  confere((await A.estado(p)).salvamentoConferido === true, 'o app registra que este navegador guarda os dados');
+  await venci(p); await p.waitForSelector('#b-corrigir-hoje');
+
+  // três dias sem abrir: adiar as respostas
+  await abrirNoDia(p, '2026-12-07');
+  await p.waitForSelector('#pend-salvar');
+  await p.click('#pend-depois');
+  await p.waitForSelector('#b-pend-agora');
+  confere(!(await p.isVisible('#b-venci')) && (await txt(p, '#checkin')).includes('Há 3 dias sem registro'), '“Responder depois”: a tela inicial abre, mas o check-in de hoje continua travado');
+  confere((await txt(p, '.cabecalho .sub')).startsWith('3 dias pendentes') && !(await p.isVisible('#mensagem-do-dia')), 'cabeçalho mostra as pendências, e a mensagem do dia espera as respostas');
+  confere((await p.$$(TRILHA + ' .cel.p')).length === 3 && (await p.$$(TRILHA + ' .cel.v')).length === 1, 'a trilha mostra os 3 dias pendentes');
+  const e = await A.estado(p);
+  confere(Object.keys(e.checkins).length === 1 && (await A.contas(p)).seqAtual === 1, 'pendência não vira vitória nem recaída: a sequência fica parada em 1');
+  await p.reload(); await p.waitForFunction(() => window.JORNADA60_OK === true);
+  confere(await p.isVisible('#pend-salvar'), 'ao abrir de novo, o app volta a perguntar');
+  await p.click('#pend-depois');
+  await p.click(TRILHA + ' .cel.p >> nth=0');
+  await p.waitForSelector('#pend-salvar');
+  confere(true, 'tocar em um dia pendente da trilha leva às perguntas');
+  await p.click('#pend-depois');
+  await p.click('#b-historico');
+  await p.locator('#hist-lista').getByRole('button', { name: 'Responder', exact: true }).first().click();
+  await p.waitForSelector('#pend-salvar');
+  confere(!(await p.isVisible('dialog')), 'o histórico também leva às perguntas');
+  await p.check('input[name="p-2026-12-04"][value="v"]', { force: true });
+  await p.check('input[name="p-2026-12-05"][value="r"]', { force: true });
+  await p.check('input[name="p-2026-12-06"][value="v"]', { force: true });
+  await p.click('#pend-salvar');
+  await p.waitForSelector('dialog .festa');
+  confere((await txt(p, 'dialog .festa')).includes('Sorvete'), 'ao responder, a recompensa alcançada no período (dia 2) é liberada');
+  await p.click('#b-festa-ok');
+  await p.waitForSelector('#b-continuar');
+  confere(await txt(p, '#msg-dia') === 'Dia 2 de 60', 'depois das respostas vem a mensagem do dia certo (Dia 2)');
+  await continuarMensagem(p);
+
+  // jornada concluída e depois desfeita por uma correção
+  await p.evaluate(() => {
+    const j = window.__j60, ck = {};
+    for (let i = 0; i < 60; i++) ck[j.util.somarDias('2026-09-01', i)] = 'v';
+    const est = j.estado(); est.perfil.inicio = '2026-09-01'; est.checkins = ck;
+    j.definirEstado(est);
+  });
+  await p.waitForSelector('#b-ver-jornada');
+  confere((await A.contas(p)).concluidaEm === '2026-10-30', 'jornada concluída em 30/10');
+  await p.click('#b-ver-jornada'); await p.waitForSelector('#checkin');
+  await p.click('#b-historico');
+  await p.click('#hist-lista [data-data="2026-10-10"]');
+  await naJanela(p, 'Mudar para “Recaí”');
+  await p.waitForSelector('#pend-salvar');
+  const c = await A.contas(p);
+  confere(c.concluidaEm === null && c.recorde === 39 && c.pendentes.length === 37, 'corrigir um dia para recaída desfaz a conclusão, recalcula tudo e o app pergunta pelos dias seguintes', { concl: c.concluidaEm, rec: c.recorde, pend: c.pendentes.length });
+  confere(!(await p.isVisible('dialog')), 'as janelas se fecham ao mudar de tela');
+  await p.click('[data-acao="pend-todos"][data-v="v"]'); await p.click('#pend-salvar');
+  await p.waitForSelector('#b-venci');
+  confere((await txt(p, '.cabecalho .sub')).startsWith('Dia 58 de 60') && (await A.contas(p)).seqAtual === 57, 'respondendo os dias, a contagem segue do ponto certo (20 dias depois da recaída + 37 = 57; hoje é o Dia 58)', await A.contas(p));
+  confere(registro.erros.length === 0 && registro.console.length === 0 && registro.rede.length === 0, 'sem erros, avisos ou rede', registro);
+  await contexto.close();
+}
+
 (async () => {
   const nav = await A.novoNavegador();
   try {
     await primeiraAbertura(nav);
     await diaSessenta(nav);
     await reinicioELembrete(nav);
+    await adiarFuturoEDesfazer(nav);
   } finally {
     await nav.close();
   }
