@@ -117,3 +117,15 @@ Veja `dev/README.md`. Resumo: `node dev/local.mjs up` → `npm run build && npm 
 - Importar planilhas CSV (hoje a restauração é só pelo arquivo `.json` do backup).
 - Cotação automática de moedas (exigiria liberar um serviço externo no CSP — pense duas vezes: hoje nada sai do aparelho além do Supabase).
 - Stripe: usar a data do pagamento em vez da data em que o checkout foi aberto (boleto e débito pagos dias depois contam na semana em que foram gerados, e ficam de fora se a busca não alcançar essa semana); avisar quando um link muda de avatar (as semanas antigas do link passam a ser propostas para o avatar novo); descontar reembolsos (pediria mais permissões na chave), contar renovações de assinatura (hoje só a primeira cobrança, que é a sessão de checkout) e atualizar sozinho ao abrir a tela Vendas (hoje é sempre pelo botão, com conferência).
+
+## Jornada 60 (app à parte, na pasta `jornada-60/`)
+
+Outro pedido do mesmo dono, **sem relação com o painel**: um app pessoal de arquivo único (`jornada-60/index.html` + `LEIAME.md`) para ficar 60 dias sem um hábito, com recompensas por marcos. Não entra no build, não é publicado na Vercel e não usa Supabase. Ferramentas e testes em `dev/jornada-60/` (leia o `README.md` de lá).
+
+- **Um arquivo só**: HTML, CSS e JS juntos, sem framework, sem build, sem CDN e sem rede (a própria página traz um Content-Security-Policy `default-src 'none'`). Tem de abrir com dois cliques (`file://`).
+- **O progresso não pode se perder** (o dono frisou): dados em uma única chave do localStorage (`jornada60`, com `versao`), gravação conferida na hora, aviso quando o navegador não deixa salvar, dados ilegíveis nunca são apagados sozinhos, duas abas se sincronizam. Ao mudar o formato dos dados, aumente `VERSAO` e converta em `migrar()`.
+- **“Hoje” é a data local** (`getFullYear/getMonth/getDate`); nunca UTC nem `toISOString`. As contas de dias usam inteiros (`num`/`deNum`).
+- **Tudo é calculado a partir dos check-ins** (`calcular`): sequência, recorde, dia X, pendências, conclusão. Recompensa liberada fica liberada para sempre (`liberarPorNovosPicos`, `liberarAlcancadas`).
+- **Versículos**: Almeida Revista e Corrigida de 1911 (domínio público), extraídos por script e com só a ortografia atualizada. Nunca digite versículo de memória: use `dev/jornada-60/versiculos/`.
+- O dono pode editar as mensagens à mão dentro do `index.html` (o bloco `BANCO DE MENSAGENS`): **o arquivo é a fonte**; não regenere por cima.
+- Modo de teste: `index.html?hoje=AAAA-MM-DD` (data simulada, chave `jornada60:teste`). Antes de entregar qualquer mudança: `node dev/jornada-60/testes/todos.cjs`.
