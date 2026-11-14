@@ -1,0 +1,20 @@
+# Código USFM -> (pasta no repositório da ARC 1911, nome em português atual)
+LIVROS = {
+ 'GEN': ('01-GEN', 'Gênesis'), 'EXO': ('02-EXO', 'Êxodo'), 'LEV': ('03-LEV', 'Levítico'), 'NUM': ('04-NUM', 'Números'),
+ 'DEU': ('05-DEU', 'Deuteronômio'), 'JOS': ('06-JOS', 'Josué'), 'JDG': ('07-JDG', 'Juízes'), 'RUT': ('08-RUT', 'Rute'),
+ '1SA': ('09-1SA', '1 Samuel'), '2SA': ('10-2SA', '2 Samuel'), '1KI': ('11-1KI', '1 Reis'), '2KI': ('12-2KI', '2 Reis'),
+ '1CH': ('13-1CH', '1 Crônicas'), '2CH': ('14-2CH', '2 Crônicas'), 'EZR': ('15-EZR', 'Esdras'), 'NEH': ('16-NEH', 'Neemias'),
+ 'EST': ('17-EST', 'Ester'), 'JOB': ('18-JOB', 'Jó'), 'PSA': ('19-PSA', 'Salmos'), 'PRO': ('20-PRO', 'Provérbios'),
+ 'ECC': ('21-ECC', 'Eclesiastes'), 'SNG': ('22-SNG', 'Cantares'), 'ISA': ('23-ISA', 'Isaías'), 'JER': ('24-JER', 'Jeremias'),
+ 'LAM': ('25-LAM', 'Lamentações'), 'EZK': ('26-EZK', 'Ezequiel'), 'DAN': ('27-DAN', 'Daniel'), 'HOS': ('28-HOS', 'Oseias'),
+ 'JOL': ('29-JOL', 'Joel'), 'AMO': ('30-AMO', 'Amós'), 'OBA': ('31-OBA', 'Obadias'), 'JON': ('32-JON', 'Jonas'),
+ 'MIC': ('33-MIC', 'Miqueias'), 'NAM': ('34-NAM', 'Naum'), 'HAB': ('35-HAB', 'Habacuque'), 'ZEP': ('36-ZEP', 'Sofonias'),
+ 'HAG': ('37-HAG', 'Ageu'), 'ZEC': ('38-ZEC', 'Zacarias'), 'MAL': ('39-MAL', 'Malaquias'),
+ 'MAT': ('41-MAT', 'Mateus'), 'MRK': ('42-MRK', 'Marcos'), 'LUK': ('43-LUK', 'Lucas'), 'JHN': ('44-JHN', 'João'),
+ 'ACT': ('45-ACT', 'Atos'), 'ROM': ('46-ROM', 'Romanos'), '1CO': ('47-1CO', '1 Coríntios'), '2CO': ('48-2CO', '2 Coríntios'),
+ 'GAL': ('49-GAL', 'Gálatas'), 'EPH': ('50-EPH', 'Efésios'), 'PHP': ('51-PHP', 'Filipenses'), 'COL': ('52-COL', 'Colossenses'),
+ '1TH': ('53-1TH', '1 Tessalonicenses'), '2TH': ('54-2TH', '2 Tessalonicenses'), '1TI': ('55-1TI', '1 Timóteo'),
+ '2TI': ('56-2TI', '2 Timóteo'), 'TIT': ('57-TIT', 'Tito'), 'PHM': ('58-PHM', 'Filemom'), 'HEB': ('59-HEB', 'Hebreus'),
+ 'JAS': ('60-JAS', 'Tiago'), '1PE': ('61-1PE', '1 Pedro'), '2PE': ('62-2PE', '2 Pedro'), '1JN': ('63-1JN', '1 João'),
+ '2JN': ('64-2JN', '2 João'), '3JN': ('65-3JN', '3 João'), 'JUD': ('66-JUD', 'Judas'), 'REV': ('67-REV', 'Apocalipse'),
+}
