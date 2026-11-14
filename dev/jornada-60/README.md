@@ -23,7 +23,8 @@ node dev/jornada-60/testes/todos.cjs
 | `tentacao.cjs` | passo a passo do botão “Estou sendo tentado”, com o relógio controlado nos 90 segundos |
 | `robustez.cjs` | relógio de verdade às 23h30 em São Paulo, dados ilegíveis, navegador que não salva, só teclado, telas de 320–390 px, duas abas |
 | `acessibilidade.cjs` | contraste de cada texto visível (mínimo 4,5:1; 3:1 em texto grande), nome de cada botão e rótulo de cada campo, em 37 telas e janelas |
-| `fotos.cjs`, `fotos-extra.cjs` | não são testes: fotografam as telas (`celular` ou `computador`) em `capturas/` para a conferência visual |
+| `pasta-com-acentos.cjs` | o arquivo guardado em uma pasta com espaços e acentos abre e salva igual |
+| `fotos.cjs`, `fotos-extra.cjs`, `fotos-entrega.cjs` | não são testes: fotografam as telas (`celular` ou `computador`) em `capturas/` para a conferência visual |
 
 O modo de teste do app (`index.html?hoje=AAAA-MM-DD`) simula a data e usa a chave `jornada60:teste` do
 localStorage; só nesse modo existe `window.__j60` (ganchos usados pelos testes).
