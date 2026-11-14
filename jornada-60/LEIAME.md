@@ -23,11 +23,11 @@ O progresso fica guardado **dentro do navegador**, ligado a este arquivo. Por is
   “Tudo certo: este navegador está guardando o seu progresso”. Se o app voltar para a configuração, ou mostrar um
   aviso amarelo dizendo que não consegue guardar, esse navegador não serve: use outro.
 
-**No celular:** a tela foi feita primeiro para o celular, mas cada navegador de celular trata arquivos locais de um
-jeito, e isso eu não consegui testar em um aparelho de verdade. No Android, abra o arquivo pelo aplicativo de arquivos
-escolhendo o Chrome e faça a conferência acima (fechar e abrir). No iPhone, o Safari não guarda dados de arquivos
-abertos assim; para usar no iPhone o arquivo precisa estar em um endereço na internet (os dados continuam só no
-aparelho). Em qualquer caso, quem garante o progresso é o backup.
+**No celular:** a tela foi desenhada primeiro para o celular, mas cada navegador de celular trata arquivos locais de
+um jeito, e isso não foi testado em um aparelho de verdade. No Android, abra o arquivo pelo aplicativo de arquivos
+escolhendo o Chrome e faça a conferência acima (fechar e abrir). No iPhone, um arquivo `.html` aberto pelo app
+Arquivos costuma aparecer só como pré-visualização, sem guardar nada; para usar no iPhone o arquivo precisa estar em
+um endereço na internet (os dados continuam só no aparelho). Em qualquer caso, quem garante o progresso é o backup.
 
 ## Como fazer backup
 

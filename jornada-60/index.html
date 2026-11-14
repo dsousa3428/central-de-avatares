@@ -1945,9 +1945,9 @@ function abrir(html, opts) {
     if (d.parentNode) d.parentNode.removeChild(d);
     travarFundo();
     if (opts.aoFechar) opts.aoFechar(d._retorno || '');
-    if (focoAntes && document.contains(focoAntes) && typeof focoAntes.focus === 'function') {
-      try { focoAntes.focus({ preventScroll: true }); } catch (e) { /* nada */ }
-    }
+    var volta = focoAntes && focoAntes !== document.body && document.contains(focoAntes) ? focoAntes : (pilha.length ? null : ($('#checkin-titulo') || $('#titulo')));
+    if (volta && typeof volta.focus === 'function') {      // devolve o foco a quem abriu a janela (ou, se sumiu da tela, ao título)
+      try { volta.focus({ preventScroll: true }); } catch (e) { /* nada */ } }
     if (!pilha.length && ui.viradaPendente) aoMudarODia();
   };
   d.addEventListener('close', function () { d._encerrar(); });           // Esc ou fechamento pelo navegador
