@@ -213,6 +213,34 @@ export interface ActivityEntry extends BaseRow {
   occurred_at: string;
 }
 
+/** Para que serve um prompt ou arquivo (ver src/lib/library.ts). */
+export type LibraryCategory = "imagem" | "video" | "texto" | "voz" | "outro";
+
+/**
+ * Um item de "Arquivos e prompts": um prompt (texto para copiar), um arquivo
+ * guardado no armazenamento do Supabase, ou os dois juntos.
+ */
+export interface LibraryItem extends BaseRow {
+  /** null = geral (não é de um avatar só). */
+  avatar_id: string | null;
+  title: string;
+  /** Guardado como texto: leia com `readCategory`. */
+  category: string;
+  /** O texto do prompt. */
+  content: string | null;
+  notes: string | null;
+  /** Onde o arquivo está no bucket "arquivos" ("<usuário>/<item>/<nome>"). */
+  file_path: string | null;
+  /** A miniatura (só imagens). */
+  thumb_path: string | null;
+  /** O nome original do arquivo. */
+  file_name: string | null;
+  /** Em bytes. */
+  file_size: number | null;
+  file_type: string | null;
+  updated_at: string;
+}
+
 export interface AppPrefs {
   /** Versão dos dados de exemplo já criados (0/ausente = nunca). */
   examples_version?: number;
@@ -242,6 +270,7 @@ export interface Tables {
   warmups: Warmup;
   weekly_sales: WeeklySale;
   activity_log: ActivityEntry;
+  library_items: LibraryItem;
 }
 
 export type TableName = keyof Tables;

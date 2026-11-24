@@ -5,6 +5,12 @@
 // continua cifrado (`settings.vault` + `accounts.secrets_enc`): sem a senha-mestra
 // ninguém lê as senhas, com ou sem o arquivo. Na restauração os ids são mantidos:
 // o bloco cifrado de cada conta só abre com o id da própria conta.
+//
+// Arquivos e prompts (`library_items`) vão junto — os prompts inteiros, e de cada
+// arquivo só o nome e onde ele está: o arquivo em si continua no armazenamento do
+// Supabase. A tabela é opcional no backup: um arquivo feito antes de ela existir
+// (ou num banco que ainda não a tem) simplesmente não a traz, e a restauração deixa
+// os itens de agora como estão.
 
 import { AppError } from "./errors";
 import type { Db } from "./store";
@@ -24,9 +30,16 @@ export const BACKUP_TABLES = [
   "warmups",
   "weekly_sales",
   "activity_log",
+  "library_items",
 ] as const satisfies readonly TableName[];
 
-export type BackupTables = { [T in (typeof BACKUP_TABLES)[number]]: Array<Record<string, unknown>> };
+export type BackupTable = (typeof BACKUP_TABLES)[number];
+
+/** Tabelas que um backup pode não trazer (vieram depois do formato 1). */
+export const OPTIONAL_TABLES: ReadonlySet<BackupTable> = new Set<BackupTable>(["library_items"]);
+
+type Rows = Array<Record<string, unknown>>;
+export type BackupTables = { [T in Exclude<BackupTable, "library_items">]: Rows } & { library_items?: Rows };
 
 export interface BackupSettings {
   vault: Record<string, unknown> | null;
@@ -44,7 +57,7 @@ export interface BackupFile {
   settings: BackupSettings | null;
 }
 
-const KEY_OF: Record<(typeof BACKUP_TABLES)[number], keyof Db> = {
+const KEY_OF: Record<BackupTable, keyof Db> = {
   countries: "countries",
   phones: "phones",
   antidetect_profiles: "profiles",
@@ -53,6 +66,7 @@ const KEY_OF: Record<(typeof BACKUP_TABLES)[number], keyof Db> = {
   warmups: "warmups",
   weekly_sales: "sales",
   activity_log: "activity",
+  library_items: "library",
 };
 
 /** Tira o dono da linha: quem restaura é o dono de quem está com o login aberto. */
@@ -66,7 +80,11 @@ function withoutOwner(row: object): Record<string, unknown> {
 export function buildBackup(db: Db, now: Date): BackupFile {
   const tables = {} as BackupTables;
   for (const table of BACKUP_TABLES) {
-    tables[table] = (db[KEY_OF[table]] as unknown as Array<Tables[typeof table]>).map(withoutOwner);
+    // sem a tabela no banco (script SQL ainda não atualizado), o backup não a leva: restaurá-lo
+    // não mexe nos arquivos e prompts de ninguém
+    if (table === "library_items" && !db.libraryReady) continue;
+    const rows = (db[KEY_OF[table]] ?? []) as unknown as Array<Tables[typeof table]>;
+    tables[table] = rows.map(withoutOwner);
   }
   const settings: Settings | null = db.settings;
   return {
@@ -92,12 +110,17 @@ export function backupFileName(now: Date, extension: string, prefix = BACKUP_APP
   return `${prefix}-${stamp}.${extension}`;
 }
 
-export type BackupCounts = Record<(typeof BACKUP_TABLES)[number], number>;
+export type BackupCounts = Record<BackupTable, number>;
 
 export function backupCounts(file: BackupFile): BackupCounts {
   const counts = {} as BackupCounts;
-  for (const table of BACKUP_TABLES) counts[table] = file.tables[table].length;
+  for (const table of BACKUP_TABLES) counts[table] = file.tables[table]?.length ?? 0;
   return counts;
+}
+
+/** Quantos arquivos (fotos, PDFs…) os itens do backup citam — eles mesmos não vão no arquivo. */
+export function backupFiles(file: BackupFile): number {
+  return (file.tables.library_items ?? []).filter((row) => typeof row.file_path === "string" && row.file_path !== "").length;
 }
 
 /** Quantas contas do backup têm senhas guardadas no cofre. */
@@ -138,9 +161,10 @@ export function parseBackup(text: string): BackupFile {
   if (!isObject(raw.tables)) bad("Este backup está incompleto (sem as tabelas).");
 
   const tables = {} as BackupTables;
-  const ids = {} as Record<(typeof BACKUP_TABLES)[number], Set<string>>;
+  const ids = {} as Record<BackupTable, Set<string>>;
   for (const table of BACKUP_TABLES) {
     const rows = raw.tables[table];
+    if (rows === undefined && OPTIONAL_TABLES.has(table)) continue;
     if (!Array.isArray(rows)) bad(`Este backup está incompleto (falta a tabela “${table}”).`);
     const seen = new Set<string>();
     tables[table] = rows.map((row) => {
@@ -155,7 +179,7 @@ export function parseBackup(text: string): BackupFile {
   }
 
   // ninguém pode citar uma linha que não veio no arquivo
-  const refs: Array<[(typeof BACKUP_TABLES)[number], string, (typeof BACKUP_TABLES)[number], boolean]> = [
+  const refs: Array<[BackupTable, string, BackupTable, boolean]> = [
     ["avatars", "country_id", "countries", true],
     ["accounts", "avatar_id", "avatars", true],
     ["accounts", "phone_id", "phones", false],
@@ -165,9 +189,10 @@ export function parseBackup(text: string): BackupFile {
     ["weekly_sales", "account_id", "accounts", false],
     ["activity_log", "avatar_id", "avatars", false],
     ["activity_log", "account_id", "accounts", false],
+    ["library_items", "avatar_id", "avatars", false],
   ];
   for (const [table, column, target, required] of refs) {
-    for (const row of tables[table]) {
+    for (const row of tables[table] ?? []) {
       const value = row[column];
       if (value === null || value === undefined) {
         if (required) bad(`Este backup está danificado (linha da tabela “${table}” sem “${column}”).`);

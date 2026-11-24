@@ -1,13 +1,15 @@
 "use client";
 
-import { Pencil, Plus } from "lucide-react";
-import { formatMoney, formatNumber } from "@/lib/format";
+import Link from "next/link";
+import { FolderOpen, Pencil, Plus } from "lucide-react";
+import { formatMoney, formatNumber, plural } from "@/lib/format";
+import { libraryUsage } from "@/lib/library";
 import { generationLabel, phoneLabel, profileShortLabel } from "@/lib/selectors";
 import { updateRow, useStore } from "@/lib/store";
 import type { Account, Avatar, Country } from "@/lib/types";
 import { DetailList, DetailRow, LinkRow } from "@/components/common/detail-row";
 import { AccountStatusBadge, AvatarStatusBadge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonClass } from "@/components/ui/button";
 import { Section } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
 import { StructureSection } from "./structure-section";
@@ -127,6 +129,37 @@ export function OverviewTab({ avatar, country, account, onEdit, onGoTo, onNewAcc
           <p className="py-2 text-sm text-muted">Nenhum link cadastrado ainda. Adicione na aba Links.</p>
         )}
       </Section>
+
+      {db.libraryReady ? <LibraryShortcut avatar={avatar} /> : null}
     </div>
+  );
+}
+
+/** Os prompts e arquivos deste avatar ficam na tela "Arquivos e prompts": o atalho já abre com o filtro dele. */
+function LibraryShortcut({ avatar }: { avatar: Avatar }) {
+  const db = useStore();
+  const usage = libraryUsage(db.library.filter((item) => item.avatar_id === avatar.id));
+  const summary = [
+    usage.prompts > 0 ? plural(usage.prompts, "prompt", "prompts") : "",
+    usage.files > 0 ? plural(usage.files, "arquivo", "arquivos") : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  return (
+    <Section
+      title="Arquivos e prompts"
+      subtitle={summary ? `${summary} deste avatar.` : "Nada guardado deste avatar ainda: prompts, fotos de referência, PDFs…"}
+      className="md:col-span-2"
+      actions={
+        <Link href={`/arquivos?avatar=${avatar.id}`} className={buttonClass("secondary", "sm")}>
+          <FolderOpen className="size-4" /> Abrir
+        </Link>
+      }
+    >
+      <p className="text-sm leading-relaxed text-muted">
+        Guarde os prompts que geram este avatar (para copiar com um toque) e os arquivos dele, num lugar privado do seu
+        Supabase.
+      </p>
+    </Section>
   );
 }

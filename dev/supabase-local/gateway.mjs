@@ -1,18 +1,20 @@
 // Porteiro mínimo que imita o endereço único do Supabase:
 //   http://localhost:54321/auth/v1/*  -> Auth (GoTrue)
 //   http://localhost:54321/rest/v1/*  -> API (PostgREST)
+//   http://localhost:54321/storage/v1/* -> Armazenamento de arquivos (Storage)
 import http from "node:http";
 
 const routes = [
   { prefix: "/auth/v1", port: 54399 },
   { prefix: "/rest/v1", port: 54398 },
+  { prefix: "/storage/v1", port: 54397 },
 ];
 
 const cors = (req) => ({
   "access-control-allow-origin": req.headers.origin || "*",
   "access-control-allow-methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS,HEAD",
   "access-control-allow-headers": req.headers["access-control-request-headers"] || "*",
-  "access-control-expose-headers": "content-range,content-profile,x-total-count",
+  "access-control-expose-headers": "content-range,content-profile,x-total-count,content-disposition,content-length",
   "access-control-max-age": "3600",
 });
 

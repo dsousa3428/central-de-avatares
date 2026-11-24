@@ -6,9 +6,9 @@ Nada desta pasta vai para a Vercel. Ela existe para testar o painel de verdade (
 
 | Caminho | Para que serve |
 |---|---|
-| `local.mjs` | Sobe/desliga um Supabase "de bolso" (Postgres + Auth + API) com Docker, aplica `supabase/schema.sql`, cria o usuário de teste e escreve o `.env.local`. |
+| `local.mjs` | Sobe/desliga um Supabase "de bolso" (Postgres + Auth + API + armazenamento de arquivos) com Docker, aplica `supabase/schema.sql`, cria o usuário de teste e escreve o `.env.local`. |
 | `stripe-mock.cjs` | Uma Stripe "de mentira" (só as duas listas que o painel lê). O `.env.local` de testes aponta o servidor para ela (`STRIPE_API_BASE`, que só aceita endereços do próprio computador) com uma chave inventada. Quem liga e desliga é o próprio `etapa-h.cjs`; os outros testes não precisam dela (nada chama a Stripe sem um toque no botão). |
-| `supabase-local/` | `docker-compose.yml`, scripts de inicialização do banco e o gateway que imita o endereço único do Supabase (`http://localhost:54321`). |
+| `supabase-local/` | `docker-compose.yml`, scripts de inicialização do banco e o gateway que imita o endereço único do Supabase (`http://localhost:54321`: `/auth/v1`, `/rest/v1` e `/storage/v1`). O armazenamento de arquivos é o mesmo serviço do Supabase (`supabase/storage-api`), guardando os arquivos num volume do Docker. |
 | `e2e/etapa-a.cjs` | Teste de ponta a ponta da etapa (a), no tamanho de um celular. |
 | `e2e/etapa-b.cjs` | Etapa (b): aquecimento, tarefas da tela Hoje, dia pulado e empurrar o calendário, padrão em Configurações. |
 | `e2e/etapa-c.cjs` | Etapa (c): cofre de senhas — criar a senha-mestra, guardar, mostrar/copiar, trancar (à mão, sozinho, ao sair), trocar a senha (inclusive com o banco sem a função nova), dois aparelhos, apagar o cofre. Confere também o banco (só texto cifrado) e a rede (nenhuma senha em texto claro sai do aparelho). Leva uns 4 minutos: espera de verdade o trancamento automático. |
@@ -18,12 +18,13 @@ Nada desta pasta vai para a Vercel. Ela existe para testar o painel de verdade (
 | `e2e/etapa-g.cjs` | Estrutura do avatar: marcar e desmarcar site, entregável, checkout e automação, a seção "Montar a estrutura" da tela Hoje (com a marca de descanso), o aviso quando o aquecimento termina com a estrutura pela metade e a coluna da Planilha. |
 | `e2e/etapa-h.cjs` | Vendas pela Stripe, contra a Stripe de mentira: as rotas (sem login, pedido malfeito, a chave que nunca volta), de quem é cada link, buscar → conferir → lançar, venda nova, período maior, zero da semana passada, moedas misturadas, o mesmo link em dois avatares, lançamento que mudou depois da conferência, erros explicados, o passo a passo de ligação e servidores de teste sem a chave, com a chave errada e com a Stripe reservada a um e-mail (`STRIPE_OWNER_EMAIL`). Leva uns 2 minutos. |
 | `e2e/etapa-i.cjs` | Funis para modelar: cadastrar o avatar modelo, registrar as etapas (o que falta, validações, posição no funil), marcar como modelado, texto comprido (ver tudo, copiar), vários modelos, copiar o funil para outro avatar, apagar, e o caso do modelo apagado em outro aparelho. Confere também que o kit de reposição e a estrutura — que moram no mesmo JSON — não são afetados. |
+| `e2e/etapa-j.cjs` | Arquivos e prompts: o banco sem a tabela nova (o resto do painel funciona; a tela ensina a rodar o script), prompt novo e copiar, enviar vários arquivos (o grande demais é recusado antes), miniatura, abrir e baixar pelo link assinado, busca e filtros, anexar/trocar/tirar o arquivo (o antigo sai do armazenamento), o atalho da página do avatar, **outro usuário do mesmo Supabase tentando ver, baixar, apagar e pôr arquivo na pasta do dono**, restaurar backup com e sem a lista, arquivo que não existe mais e apagar (item e avatar). |
 | `e2e/planilha.cjs` | Planilha: grade, edição nas células, ordenar, filtrar, buscar, copiar e baixar. |
 | `e2e/extras.cjs` | Situações de exceção: banco sem tabelas, queda de internet ao salvar e regras dos dados de exemplo. |
 | `e2e/robustez.cjs` | Dois aparelhos ao mesmo tempo, toques rápidos, falhas no meio de um salvamento, validações de digitação, sair em outra aba. |
 | `e2e/textos-longos.cjs` | Layout: com nomes, links e anotações enormes, nenhuma tela pode rolar para o lado num celular de 360 px. |
 | `e2e/botoes.cjs` | Layout: em 320, 360 e 390 px, nenhum botão (das telas e das janelas) pode ficar com o texto quebrado, cortado ou fora da tela. |
-| `unit/*.test.mjs` | Testes rápidos das regras puras: números, links, @ e datas; calendário de aquecimento; exportação; criptografia do cofre; vendas (semanas, somas, cotações); avisos, checklist de reposição e quedas; busca, backup e o .zip das planilhas; estrutura do avatar; funis para modelar (modelos, etapas, ordem, cópia, planilha); Stripe (de quem é cada link, semanas, moedas, o que muda no painel — e o código do servidor: quem pode pedir, a chave, as listas). |
+| `unit/*.test.mjs` | Testes rápidos das regras puras: números, links, @ e datas; calendário de aquecimento; exportação; criptografia do cofre; vendas (semanas, somas, cotações); avisos, checklist de reposição e quedas; busca, backup e o .zip das planilhas; estrutura do avatar; arquivos e prompts (tipos, nomes de arquivo, busca e filtros, o lugar deles no backup); funis para modelar (modelos, etapas, ordem, cópia, planilha); Stripe (de quem é cada link, semanas, moedas, o que muda no painel — e o código do servidor: quem pode pedir, a chave, as listas). |
 
 As chaves do ambiente local são geradas na hora e ficam em `supabase-local/.env` (ignorado pelo git).
 
@@ -79,6 +80,10 @@ node dev/e2e/etapa-h.cjs
 
 ```bash
 node dev/e2e/etapa-i.cjs
+```
+
+```bash
+node dev/e2e/etapa-j.cjs
 ```
 
 ```bash

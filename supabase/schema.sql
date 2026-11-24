@@ -237,6 +237,34 @@ create table if not exists public.settings (
 
 
 -- ---------------------------------------------------------------------
+-- ARQUIVOS E PROMPTS
+-- Cada item é um prompt (texto para copiar e colar na IA), um arquivo (foto,
+-- PDF, vídeo…) ou os dois juntos — o prompt e a imagem que ele gerou. O arquivo
+-- em si fica no armazenamento do Supabase (bucket "arquivos", mais abaixo), na
+-- pasta do próprio usuário; aqui ficam o nome, o tamanho e onde ele está.
+-- ---------------------------------------------------------------------
+create table if not exists public.library_items (
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  avatar_id    uuid references public.avatars (id) on delete set null,  -- vazio = geral (de todos os avatares)
+  title        text not null,
+  category     text not null default 'outro',     -- imagem, video, texto, voz, outro
+  content      text,                              -- o texto do prompt
+  notes        text,
+  file_path    text,                              -- onde o arquivo está no bucket "arquivos"
+  thumb_path   text,                              -- miniatura (só imagens)
+  file_name    text,                              -- o nome original do arquivo
+  file_size    bigint,                            -- em bytes
+  file_type    text,                              -- ex.: image/png, application/pdf
+  is_example   boolean not null default false,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now()
+);
+
+create index if not exists library_items_avatar_idx on public.library_items (avatar_id);
+
+
+-- ---------------------------------------------------------------------
 -- SEGURANÇA: Row Level Security + permissões + gatilhos
 -- ---------------------------------------------------------------------
 do $$
@@ -245,7 +273,7 @@ declare
 begin
   foreach t in array array[
     'countries', 'phones', 'antidetect_profiles', 'avatars', 'accounts',
-    'warmups', 'weekly_sales', 'activity_log', 'settings'
+    'warmups', 'weekly_sales', 'activity_log', 'settings', 'library_items'
   ]
   loop
     -- liga o RLS
@@ -281,17 +309,46 @@ end
 $$;
 
 -- ---------------------------------------------------------------------
+-- ARMAZENAMENTO DOS ARQUIVOS (Supabase Storage)
+-- Um "bucket" privado chamado "arquivos": nada nele é público. Cada usuário
+-- só envia, lê e apaga arquivos dentro da própria pasta ("<id do usuário>/…").
+-- Limite de 50 MB por arquivo (o máximo do plano gratuito).
+-- ---------------------------------------------------------------------
+do $$
+begin
+  if to_regclass('storage.buckets') is null or to_regclass('storage.objects') is null then
+    raise notice 'Este banco não tem o armazenamento de arquivos do Supabase: a parte dos arquivos foi pulada.';
+    return;
+  end if;
+
+  insert into storage.buckets (id, name, public, file_size_limit)
+  values ('arquivos', 'arquivos', false, 52428800)
+  on conflict (id) do update set public = false;
+
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'storage' and tablename = 'objects' and policyname = 'cda_arquivos_dono'
+  ) then
+    create policy cda_arquivos_dono on storage.objects for all to authenticated
+      using (bucket_id = 'arquivos' and (storage.foldername(name))[1] = (select auth.uid())::text)
+      with check (bucket_id = 'arquivos' and (storage.foldername(name))[1] = (select auth.uid())::text);
+  end if;
+end
+$$;
+
+
+-- ---------------------------------------------------------------------
 -- VERSÃO DA ESTRUTURA
 -- O painel pergunta este número quando uma tela depende de algo que foi
--- acrescentado depois (2: a troca da senha-mestra; 3: restaurar backup).
--- Aumente ao acrescentar.
+-- acrescentado depois (2: a troca da senha-mestra; 3: restaurar backup;
+-- 4: arquivos e prompts). Aumente ao acrescentar.
 -- ---------------------------------------------------------------------
 create or replace function public.cda_schema_version()
 returns integer
 language sql
 immutable
 set search_path = ''
-as $$ select 3 $$;
+as $$ select 4 $$;
 
 revoke all on function public.cda_schema_version() from public, anon;
 grant execute on function public.cda_schema_version() to authenticated;
@@ -388,6 +445,8 @@ declare
   uid uuid := (select auth.uid());
   data jsonb;
   cfg jsonb;
+  has_library boolean;
+  links jsonb := '{}'::jsonb;
 begin
   if uid is null then
     raise exception 'cda_restore_no_user' using errcode = '28000';
@@ -398,6 +457,18 @@ begin
   end if;
   data := backup -> 'tables';
   cfg := backup -> 'settings';
+
+  -- Arquivos e prompts: um backup feito antes de eles existirem não traz a lista. Aí os
+  -- itens de agora continuam como estão (os arquivos em si nunca vão no backup) — só é
+  -- preciso lembrar de que avatar cada um é, porque apagar os avatares abaixo desfaz a ligação.
+  has_library := jsonb_typeof(data -> 'library_items') = 'array';
+  if has_library then
+    delete from public.library_items where user_id = uid;
+  else
+    select coalesce(jsonb_object_agg(id::text, avatar_id), '{}'::jsonb) into links
+      from public.library_items
+     where user_id = uid and avatar_id is not null;
+  end if;
 
   -- 1) apaga o que existe (de quem cita para quem é citado)
   delete from public.activity_log where user_id = uid;
@@ -434,6 +505,18 @@ begin
   insert into public.activity_log
     select (jsonb_populate_record(null::public.activity_log, item || jsonb_build_object('user_id', uid))).*
       from jsonb_array_elements(coalesce(data -> 'activity_log', '[]'::jsonb)) as item;
+  if has_library then
+    insert into public.library_items
+      select (jsonb_populate_record(null::public.library_items, item || jsonb_build_object('user_id', uid))).*
+        from jsonb_array_elements(data -> 'library_items') as item;
+  else
+    -- (devolve cada item ao seu avatar, se ele voltou com o backup)
+    update public.library_items l
+       set avatar_id = (links ->> l.id::text)::uuid
+     where l.user_id = uid
+       and links ? l.id::text
+       and exists (select 1 from public.avatars a where a.user_id = uid and a.id = (links ->> l.id::text)::uuid);
+  end if;
 
   -- 3) configurações (o cofre vem junto: sem ele as senhas cifradas não abririam)
   insert into public.settings (user_id, vault, warmup_defaults, brl_rates, prefs)

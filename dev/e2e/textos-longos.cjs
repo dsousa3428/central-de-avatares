@@ -19,6 +19,10 @@ const S = SHOTS + '/';
   const prid = psql("select id from public.antidetect_profiles where number = '9999999999'");
   psql(`insert into public.avatars (user_id, country_id, name, niche, product_name, product_price, product_currency, sales_site_url, notes, position, extra_links, model_videos, reference_profiles, kit) values ('${uid}', '${cid}', 'Dottoressa ${long} ${long} Bianchi', 'Nicho ${long}${long}${long}', 'Produto ${long}${long}', 123456789.99, 'EUR', 'https://exemplo.com/${long}${long}${long}/${long}', '${long}${long}${long}${long}', 9, '[{"id":"1","label":"${long}${long}","url":"https://exemplo.com/${long}${long}${long}"}]', '[{"id":"1","label":"${long}${long}${long}","url":"https://exemplo.com/${long}${long}${long}","status":"a_modelar","note":"${long}${long}${long}"}]', '[{"id":"1","handle":"@${long}${long}${long}","note":"${long}${long}${long}"}]', '{"display_name":"${long}${long}","bio":"${long}${long}${long}","bio_link":"https://exemplo.com/${long}${long}${long}","highlights":[{"id":"1","title":"${long}${long}","text":"${long}${long}${long}"}],"proof_links":[{"id":"1","label":"${long}${long}","url":"https://exemplo.com/${long}${long}${long}"}]}')`);
   const aid = psql("select id from public.avatars where name like 'Dottoressa%'");
+  // arquivos e prompts com tudo comprido (o arquivo não existe no armazenamento: a linha diz "não encontrado")
+  psql(`insert into public.library_items (user_id, avatar_id, title, category, content, notes, file_path, file_name, file_size, file_type) values
+    ('${uid}', '${aid}', 'Prompt ${long}${long} ${long}', 'imagem', '${long}${long}${long}${long} ${long}\n${long}${long}${long}', '${long}${long}${long}', null, null, null, null),
+    ('${uid}', '${aid}', 'Arquivo ${long}${long}${long}', 'texto', null, '${long}${long}', '${uid}/x/abc-${long}.pdf', '${long}${long}${long}.pdf', 123456789, 'application/pdf')`);
   psql(`insert into public.accounts (user_id, avatar_id, generation, handle, email, status, phone_id, profile_id, proxy, followers, notes) values ('${uid}', '${aid}', 1, 'dottoressa.${long.toLowerCase()}.${long.toLowerCase()}', '${long.toLowerCase()}.${long.toLowerCase()}@${long.toLowerCase()}.exemplo.com', 'ativa', '${pid}', '${prid}', 'usuario:senha@${long}${long}.exemplo.net:8000', 123456789, '${long}${long}${long}')`);
   psql(`update public.countries set warmup_tags = warmup_tags || array['#${long}${long}${long}'], notes = '${long}${long}${long}${long}'`);
   psql(`update public.accounts set status = 'aquecendo' where handle like 'dottoressa%'`);
@@ -125,6 +129,20 @@ const S = SHOTS + '/';
   await check('infra-perfis');
   await s.more('Configurações');
   await check('config');
+  await s.more('Arquivos e prompts');
+  await page.getByRole('list', { name: 'Arquivos e prompts' }).waitFor();
+  await page.getByText(/Arquivo não encontrado no armazenamento/).waitFor();
+  await check('arquivos');
+  await page.getByRole('button', { name: /^Editar Arquivo / }).click();
+  await page.locator('dialog[open]').getByRole('heading', { name: 'Editar item' }).waitFor();
+  await page.waitForTimeout(500);
+  {
+    const extra = await page.evaluate(() => { const p = document.querySelector('dialog[open] .cda-dialog-panel'); const b = p.querySelector('.overflow-y-auto'); return b.scrollWidth - b.clientWidth; });
+    results.push(`${extra > 0 ? '✗' : '✓'} formulario-arquivo${extra > 0 ? ` (sobra ${extra}px)` : ''}`);
+    await page.screenshot({ path: `${S}90-stress-formulario-arquivo.png` });
+  }
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector('dialog[open]'));
   console.log(results.join('\n'));
   console.log('problemas no console:', s.problems.length ? s.problems.join('\n') : '(nenhum)');
   await s.browser.close();

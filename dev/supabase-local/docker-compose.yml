@@ -1,4 +1,5 @@
-# Supabase "de bolso" para testes locais: Postgres + Auth (GoTrue) + API (PostgREST).
+# Supabase "de bolso" para testes locais: Postgres + Auth (GoTrue) + API (PostgREST)
+# + armazenamento de arquivos (Storage).
 # As senhas e chaves vêm do arquivo .env desta pasta, gerado por `node dev/local.mjs up`
 # (nunca entram no repositório).
 name: cda-local
@@ -65,3 +66,33 @@ services:
       PGRST_DB_USE_LEGACY_GUCS: "false"
       PGRST_APP_SETTINGS_JWT_EXP: 3600
     command: ["postgrest"]
+
+  # Armazenamento de arquivos (o mesmo serviço do Supabase). Ele cria as próprias tabelas no
+  # esquema "storage" ao subir; o bucket "arquivos" e a regra de acesso vêm do supabase/schema.sql.
+  storage:
+    image: supabase/storage-api:v1.87.2
+    ports: ["54397:5000"]
+    depends_on:
+      db: { condition: service_healthy }
+      rest: { condition: service_started }
+    restart: unless-stopped
+    volumes:
+      - storage-data:/var/lib/storage
+    environment:
+      ANON_KEY: ${ANON_KEY}
+      SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      POSTGREST_URL: http://rest:3000
+      AUTH_JWT_SECRET: ${JWT_SECRET}
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: postgres://supabase_storage_admin:${POSTGRES_PASSWORD}@db:5432/postgres
+      # o mesmo limite do plano gratuito do Supabase: 50 MB por arquivo
+      FILE_SIZE_LIMIT: 52428800
+      STORAGE_BACKEND: file
+      FILE_STORAGE_BACKEND_PATH: /var/lib/storage
+      TENANT_ID: stub
+      REGION: local
+      GLOBAL_S3_BUCKET: stub
+      ENABLE_IMAGE_TRANSFORMATION: "false"
+
+volumes:
+  storage-data:

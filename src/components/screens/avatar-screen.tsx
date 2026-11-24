@@ -96,6 +96,9 @@ function AvatarContent({ avatar, tab }: { avatar: Avatar; tab: TabValue }) {
         <>
           Isto apaga <strong>tudo</strong> do avatar: {accounts.length === 1 ? "1 conta" : `${accounts.length} contas`},
           histórico, vendas, links, kit e anotações. Esta ação não pode ser desfeita.
+          {db.library.some((item) => item.avatar_id === avatar.id)
+            ? " (Os arquivos e prompts dele continuam guardados, como gerais.)"
+            : null}
         </>
       ),
       confirmLabel: "Apagar avatar",

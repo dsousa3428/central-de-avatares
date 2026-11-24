@@ -180,6 +180,42 @@ async function scanWidth(WIDTH) {
   await p.screenshot({ path: OUT + `${WIDTH}-vendas.png`, fullPage: true });
   await p.getByRole('button', { name: 'Cotações' }).click();
   await scan('cotações'); await close();
+  // Arquivos e prompts: a tela com itens, os formulários e a janela de envio
+  {
+    const uid = psql("select user_id from public.avatars where name = 'Fra'' Salvio'");
+    const fra = psql("select id from public.avatars where name = 'Fra'' Salvio'");
+    psql(`insert into public.library_items (user_id, avatar_id, title, category, content, notes, file_path, file_name, file_size, file_type) values
+      ('${uid}', '${fra}', 'Rosto do Fra'' Salvio', 'imagem', 'Retrato de um frade franciscano de 70 anos, barba branca curta, hábito marrom, luz natural de janela --ar 4:5', 'Midjourney v7', '${uid}/x/abc-rosto.png', 'rosto.png', 2048, 'image/png'),
+      ('${uid}', null, 'Ebook gratuito', 'texto', null, null, '${uid}/y/abc-ebook.pdf', 'Ebook 7 receitas.pdf', 1048576, 'application/pdf')`);
+    // (gravados direto no banco: o painel só fica sabendo ao recarregar)
+    await p.reload();
+    await p.getByRole('heading', { name: 'Vendas', exact: true }).waitFor({ timeout: 30000 });
+    await p.getByRole('button', { name: 'Mais', exact: true }).click();
+    await dialog().getByRole('link', { name: 'Arquivos e prompts' }).click();
+    await p.getByRole('heading', { name: 'Arquivos e prompts', exact: true }).waitFor();
+    await p.getByRole('list', { name: 'Arquivos e prompts' }).waitFor();
+    await scan('Arquivos e prompts');
+    await p.screenshot({ path: OUT + `${WIDTH}-arquivos.png`, fullPage: true });
+    await p.getByRole('button', { name: 'Novo prompt' }).click();
+    await scan('novo prompt'); await close();
+    await p.getByRole('button', { name: "Editar Rosto do Fra' Salvio" }).click();
+    await dialog().getByRole('button', { name: 'Trocar' }).waitFor();
+    await scan('editar item (com arquivo e Apagar)');
+    await p.screenshot({ path: OUT + `${WIDTH}-item.png` });
+    await dialog().getByRole('button', { name: 'Tirar' }).click();
+    await scan('editar item (tirando o arquivo)'); await close();
+    await p.getByLabel('Arquivos para enviar').setInputFiles([
+      { name: 'uma foto com um nome bem comprido de referência.png', mimeType: 'image/png', buffer: Buffer.from('x') },
+      { name: 'Ebook.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF') },
+    ]);
+    await dialog().getByRole('heading', { name: 'Enviar arquivos' }).waitFor();
+    await scan('enviar arquivos'); await close();
+    psql('delete from public.library_items');
+    await p.reload();
+    await p.getByRole('heading', { name: 'Arquivos e prompts', exact: true }).waitFor({ timeout: 30000 });
+    await p.getByRole('link', { name: 'Vendas' }).click();
+    await p.getByRole('heading', { name: 'Vendas', exact: true }).waitFor();
+  }
   // Vendas pela Stripe: as três caras da janela (as respostas das rotas são simuladas aqui mesmo)
   const reply = (body) => (request) => request.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
   const closeStripe = async () => { await dialog().getByRole('button', { name: 'Fechar', exact: true }).last().click(); await p.waitForFunction(() => !document.querySelector('dialog[open]')); };

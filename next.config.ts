@@ -28,8 +28,9 @@ function contentSecurityPolicy(): string {
     // em desenvolvimento ele também precisa de 'unsafe-eval'.
     `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
     "style-src 'self' 'unsafe-inline'",
-    // as fotos dos avatares são links de qualquer site
-    "img-src 'self' data: blob: https:",
+    // as fotos dos avatares são links de qualquer site; as miniaturas de "Arquivos e prompts" vêm do
+    // Supabase (já coberto por https: — a origem dele vai explícita para o ambiente de testes, que é http)
+    `img-src 'self' data: blob: https:${supabase ? ` ${supabase}` : ""}`,
     "font-src 'self' data:",
     `connect-src ${connect}`,
     "object-src 'none'",

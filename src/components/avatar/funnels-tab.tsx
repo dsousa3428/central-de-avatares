@@ -23,6 +23,7 @@ import {
 import { updateRow, useStore } from "@/lib/store";
 import type { Avatar, FunnelModel, FunnelStep, FunnelStepKind } from "@/lib/types";
 import { ExternalLinkText } from "@/components/common/detail-row";
+import { LongText } from "@/components/common/long-text";
 import { invalid } from "@/components/common/validation";
 import { Button } from "@/components/ui/button";
 import { Card, EmptyState, Section } from "@/components/ui/card";
@@ -316,29 +317,6 @@ function StepRow({
         <Pencil className="size-4 text-muted" />
       </Button>
     </li>
-  );
-}
-
-/** Um texto que pode ser comprido (um e-mail inteiro colado): mostra o começo e abre no toque. */
-function LongText({ text, copyLabel, className }: { text: string; copyLabel?: string; className?: string }) {
-  const [open, setOpen] = useState(false);
-  const long = text.length > 260 || text.split("\n").length > 5;
-  return (
-    <div className={className}>
-      <p className={cn("whitespace-pre-wrap text-sm leading-relaxed text-muted", long && !open && "line-clamp-5")}>{text}</p>
-      {long || copyLabel ? (
-        <div className="mt-1 flex flex-wrap items-center gap-1">
-          {long ? (
-            <Button size="sm" variant="ghost" aria-expanded={open} onClick={() => setOpen(!open)} className="-ml-2 text-primary">
-              {open ? "Ver menos" : "Ver tudo"}
-            </Button>
-          ) : null}
-          {copyLabel ? (
-            <CopyButton text={text} message="Texto copiado" label={copyLabel} className={cn("text-muted", !long && "-ml-2")} />
-          ) : null}
-        </div>
-      ) : null}
-    </div>
   );
 }
 

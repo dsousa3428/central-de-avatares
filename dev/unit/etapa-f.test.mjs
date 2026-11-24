@@ -85,7 +85,9 @@ test("backup: leva todas as tabelas, sem o dono, e as configurações (com o cof
   assert.equal(file.app, BACKUP_APP);
   assert.equal(file.format, BACKUP_FORMAT);
   assert.equal(file.exported_at, "2026-11-12T14:32:00.000Z");
-  assert.deepEqual(backupCounts(file), { countries: 2, phones: 1, antidetect_profiles: 2, avatars: 3, accounts: 3, warmups: 1, weekly_sales: 1, activity_log: 1 });
+  // (banco sem a tabela de arquivos e prompts: o backup não a leva, e a contagem dela é zero)
+  assert.deepEqual(backupCounts(file), { countries: 2, phones: 1, antidetect_profiles: 2, avatars: 3, accounts: 3, warmups: 1, weekly_sales: 1, activity_log: 1, library_items: 0 });
+  assert.equal("library_items" in file.tables, false);
   assert.ok(Object.values(file.tables).every((rows) => rows.every((row) => !("user_id" in row))));
   assert.equal(file.tables.accounts[0].id, id(40)); // os ids são mantidos: o bloco cifrado só abre com o id da conta
   assert.equal(file.tables.accounts[0].secrets_enc, "v1.abc.def");

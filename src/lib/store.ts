@@ -15,6 +15,7 @@ import type {
   AntidetectProfile,
   Avatar,
   Country,
+  LibraryItem,
   NewRow,
   Phone,
   RowPatch,
@@ -35,6 +36,13 @@ export interface Db {
   sales: WeeklySale[];
   activity: ActivityEntry[];
   settings: Settings | null;
+  /** Arquivos e prompts. */
+  library: LibraryItem[];
+  /**
+   * false = o banco ainda não tem a tabela de arquivos e prompts (o dono não rodou o script
+   * SQL atualizado). O resto do painel funciona normalmente; só essa tela pede o script.
+   */
+  libraryReady: boolean;
 }
 
 export type LoadStatus = "idle" | "loading" | "ready" | "error";
@@ -63,6 +71,8 @@ const EMPTY: StoreState = {
   sales: [],
   activity: [],
   settings: null,
+  library: [],
+  libraryReady: false,
 };
 
 /** Nome da tabela no banco -> nome da lista na memória. */
@@ -75,6 +85,7 @@ const KEY_OF = {
   warmups: "warmups",
   weekly_sales: "sales",
   activity_log: "activity",
+  library_items: "library",
 } as const satisfies Record<TableName, keyof Db>;
 
 const SORTERS: { [T in TableName]: (a: Tables[T], b: Tables[T]) => number } = {
@@ -86,6 +97,7 @@ const SORTERS: { [T in TableName]: (a: Tables[T], b: Tables[T]) => number } = {
   warmups: (a, b) => a.created_at.localeCompare(b.created_at),
   weekly_sales: (a, b) => b.week_start.localeCompare(a.week_start),
   activity_log: (a, b) => b.occurred_at.localeCompare(a.occurred_at),
+  library_items: (a, b) => b.created_at.localeCompare(a.created_at) || a.id.localeCompare(b.id),
 };
 
 // ---------------------------------------------------------------------------
@@ -165,8 +177,22 @@ async function fetchSettings(): Promise<Settings | null> {
   return (data as Settings | null) ?? null;
 }
 
+/**
+ * Arquivos e prompts. A tabela só existe depois que o dono roda o script SQL
+ * atualizado (versão 4): até lá, o resto do painel não pode parar por causa dela.
+ */
+async function fetchLibrary(): Promise<{ rows: LibraryItem[]; ready: boolean }> {
+  try {
+    return { rows: await fetchAll("library_items"), ready: true };
+  } catch (err) {
+    const error = toAppError(err);
+    if (error.kind === "schema" && (error.code === "PGRST205" || error.code === "42P01")) return { rows: [], ready: false };
+    throw error;
+  }
+}
+
 async function fetchEverything(): Promise<Db> {
-  const [countries, phones, profiles, avatars, accounts, warmups, sales, activity, settings] =
+  const [countries, phones, profiles, avatars, accounts, warmups, sales, activity, settings, library] =
     await Promise.all([
       fetchAll("countries"),
       fetchAll("phones"),
@@ -177,6 +203,7 @@ async function fetchEverything(): Promise<Db> {
       fetchAll("weekly_sales"),
       fetchAll("activity_log"),
       fetchSettings(),
+      fetchLibrary(),
     ]);
   return {
     countries: countries.sort(SORTERS.countries),
@@ -188,6 +215,8 @@ async function fetchEverything(): Promise<Db> {
     sales: sales.sort(SORTERS.weekly_sales),
     activity: activity.sort(SORTERS.activity_log),
     settings,
+    library: library.rows.sort(SORTERS.library_items),
+    libraryReady: library.ready,
   };
 }
 
@@ -516,6 +545,8 @@ function removeLocal(table: TableName, id: string) {
       dropAccounts(new Set(state.accounts.filter((a) => a.avatar_id === id).map((a) => a.id)));
       next.sales = (next.sales ?? state.sales).filter((s) => s.avatar_id !== id);
       next.activity = (next.activity ?? state.activity).filter((e) => e.avatar_id !== id);
+      // os arquivos e prompts do avatar continuam guardados, como gerais (o banco faz o mesmo)
+      next.library = state.library.map((item) => (item.avatar_id === id ? { ...item, avatar_id: null } : item));
       break;
     }
     case "accounts":
@@ -537,6 +568,9 @@ function removeLocal(table: TableName, id: string) {
       break;
     case "activity_log":
       next.activity = state.activity.filter((r) => r.id !== id);
+      break;
+    case "library_items":
+      next.library = state.library.filter((r) => r.id !== id);
       break;
   }
   setState(next);

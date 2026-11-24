@@ -39,7 +39,7 @@ async function resetTestPassword() {
 /** Apaga os dados do painel (o usuário de teste continua existindo). */
 function resetData() {
   psql(
-    "truncate public.activity_log, public.weekly_sales, public.warmups, public.accounts, public.avatars, public.countries, public.phones, public.antidetect_profiles, public.settings cascade",
+    "truncate public.library_items, public.activity_log, public.weekly_sales, public.warmups, public.accounts, public.avatars, public.countries, public.phones, public.antidetect_profiles, public.settings cascade",
   );
 }
 

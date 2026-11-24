@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Download, FileSpreadsheet, TriangleAlert, Upload } from "lucide-react";
-import { backupCounts, backupSecrets, parseBackup, type BackupFile } from "@/lib/backup";
+import { backupCounts, backupFiles, backupSecrets, parseBackup, type BackupFile } from "@/lib/backup";
 import { downloadBackup, downloadSheets, restoreBackup } from "@/lib/backup-actions";
 import { AppError } from "@/lib/errors";
 import { refresh, RESTORE_UNAVAILABLE, schemaVersion } from "@/lib/store";
@@ -25,6 +25,7 @@ const LABELS: Array<[keyof ReturnType<typeof backupCounts>, string, string]> = [
   ["warmups", "calendário de aquecimento", "calendários de aquecimento"],
   ["weekly_sales", "lançamento de vendas", "lançamentos de vendas"],
   ["activity_log", "registro na linha do tempo", "registros na linha do tempo"],
+  ["library_items", "item em Arquivos e prompts", "itens em Arquivos e prompts"],
 ];
 
 function when(iso: string): string {
@@ -79,6 +80,11 @@ export function BackupSection() {
           abrir no Excel ou no Google Planilhas (sem as senhas). Os dois arquivos têm os seus dados: guarde em um lugar
           só seu.
         </p>
+        <p className="text-sm leading-relaxed text-muted">
+          Em <strong className="font-medium text-fg">Arquivos e prompts</strong>, o backup leva os prompts inteiros e só
+          o nome de cada arquivo: as fotos, PDFs e vídeos em si continuam guardados no Supabase (baixe os importantes à
+          parte, se quiser uma cópia fora dele).
+        </p>
         <div className="border-t border-line pt-3">
           <Button variant="secondary" onClick={() => picker.current?.click()}>
             <Upload className="size-4" /> Restaurar backup…
@@ -116,11 +122,13 @@ function RestoreDialog({ file, name, onClose }: { file: BackupFile; name: string
     void refresh();
   }, []);
 
+  // Um backup com arquivos e prompts precisa da versão do banco que sabe restaurá-los (4); os outros, da 3.
+  const needs = (file.tables.library_items?.length ?? 0) > 0 ? 4 : 3;
   useEffect(() => {
     let active = true;
     schemaVersion()
       .then((version) => {
-        if (active) setReady(version >= 3);
+        if (active) setReady(version >= needs);
       })
       .catch(() => {
         if (active) setReady(true); // sem resposta agora: deixa tentar; o erro certo aparece ao restaurar
@@ -128,10 +136,11 @@ function RestoreDialog({ file, name, onClose }: { file: BackupFile; name: string
     return () => {
       active = false;
     };
-  }, [checking]);
+  }, [checking, needs]);
 
   const counts = backupCounts(file);
   const secrets = backupSecrets(file);
+  const files = backupFiles(file);
   const lines = LABELS.filter(([key]) => counts[key] > 0).map(
     ([key, one, many]) => `${counts[key]} ${counts[key] === 1 ? one : many}`,
   );
@@ -152,8 +161,9 @@ function RestoreDialog({ file, name, onClose }: { file: BackupFile; name: string
       <Modal open onClose={onClose} title="Falta atualizar o banco (uma vez)">
         <div className="space-y-3 text-[15px] leading-relaxed">
           <p>
-            Restaurar um backup usa uma função nova do banco de dados, que troca tudo de uma vez só (ou troca tudo, ou
-            não mexe em nada). Ela entra quando você roda o script SQL atualizado:
+            Restaurar este backup usa uma função do banco de dados que troca tudo de uma vez só (ou troca tudo, ou não
+            mexe em nada) — e o seu banco ainda está numa versão anterior dela. Ela entra quando você roda o script SQL
+            atualizado:
           </p>
           <ol className="list-decimal space-y-1.5 pl-5">
             <li>
@@ -197,6 +207,12 @@ function RestoreDialog({ file, name, onClose }: { file: BackupFile; name: string
             {secrets > 0 ? (
               <li>
                 senhas no cofre de {secrets} {secrets === 1 ? "conta" : "contas"} (cifradas)
+              </li>
+            ) : null}
+            {files > 0 ? (
+              <li>
+                o nome de {files} {files === 1 ? "arquivo" : "arquivos"} (os arquivos em si continuam no Supabase; um que
+                foi apagado depois deste backup volta só com o nome)
               </li>
             ) : null}
           </ul>

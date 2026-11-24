@@ -1,5 +1,6 @@
 import {
   CalendarCheck,
+  FolderOpen,
   Globe,
   Settings,
   Smartphone,
@@ -27,6 +28,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/paises", label: "Países", longLabel: "Países e avatares", icon: Globe, also: ["/avatar"], mobile: "bar" },
   { href: "/planilha", label: "Planilha", longLabel: "Planilha", icon: Table2, mobile: "bar" },
   { href: "/vendas", label: "Vendas", longLabel: "Vendas", icon: TrendingUp, mobile: "bar" },
+  { href: "/arquivos", label: "Arquivos", longLabel: "Arquivos e prompts", icon: FolderOpen, mobile: "more" },
   { href: "/quedas", label: "Quedas", longLabel: "Quedas de contas", icon: UserRoundX, mobile: "more" },
   { href: "/infraestrutura", label: "Infra", longLabel: "Infraestrutura", icon: Smartphone, mobile: "more" },
   { href: "/configuracoes", label: "Config", longLabel: "Configurações", icon: Settings, mobile: "more" },

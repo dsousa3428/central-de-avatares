@@ -6,6 +6,7 @@
 
 import { formatDate } from "./dates";
 import { kindInfo, readFunnels } from "./funnels";
+import { categoryLabel, formatBytes } from "./library";
 import { checklistProgress, readChecklist } from "./replacement";
 import { cleanRates, inBRL } from "./sales";
 import { generationLabel, phoneLabel, profileLabel } from "./selectors";
@@ -241,6 +242,21 @@ export function buildSheets(db: Db): Sheet[] {
     }
   }
 
+  // Arquivos e prompts: o prompt inteiro e, de cada arquivo, o nome (o arquivo em si fica no Supabase)
+  const library: string[][] = [["Título", "Avatar", "Tipo", "Prompt", "Arquivo", "Tamanho", "Anotações", "Criado em"]];
+  for (const item of db.library ?? []) {
+    library.push([
+      item.title,
+      item.avatar_id ? text(avatarOf(item.avatar_id)?.name) : "Geral",
+      categoryLabel(item.category),
+      text(item.content),
+      text(item.file_name),
+      item.file_path ? formatBytes(item.file_size) : "",
+      text(item.notes),
+      date(item.created_at),
+    ]);
+  }
+
   return [
     { name: "paises", table: countries },
     { name: "avatares", table: avatars },
@@ -248,6 +264,7 @@ export function buildSheets(db: Db): Sheet[] {
     { name: "aquecimentos", table: warmups },
     { name: "vendas", table: sales },
     { name: "funis", table: funnels },
+    ...(db.libraryReady ? [{ name: "arquivos-e-prompts", table: library }] : []),
     { name: "celulares", table: phones },
     { name: "perfis-anti-detect", table: profiles },
     { name: "historico", table: history },
@@ -267,6 +284,7 @@ export function sheetsReadme(exportedAt: string): string {
     "  aquecimentos.csv        o calendário de aquecimento de cada conta, dia a dia",
     "  vendas.csv              vendas por semana",
     "  funis.csv               funis para modelar: cada avatar modelo e as etapas do funil dele",
+    "  arquivos-e-prompts.csv  os prompts e o nome de cada arquivo guardado (os arquivos ficam no Supabase)",
     "  celulares.csv           celulares cadastrados",
     "  perfis-anti-detect.csv  perfis do navegador anti-detect",
     "  historico.csv           linha do tempo das contas",

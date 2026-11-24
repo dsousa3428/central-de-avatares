@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Ambiente local de testes (só para desenvolvimento — nada disto vai para a Vercel).
 //
-//   node dev/local.mjs up      sobe o Supabase local, aplica supabase/schema.sql,
+//   node dev/local.mjs up      sobe o Supabase local (banco, login, API e arquivos), aplica supabase/schema.sql,
 //                              cria o usuário de teste e escreve o .env.local
 //   node dev/local.mjs schema  aplica de novo supabase/schema.sql (depois de mudar o script)
 //   node dev/local.mjs reset   apaga os dados do painel (mantém o usuário de teste)
@@ -110,9 +110,20 @@ export function applySchema() {
 async function up() {
   await ensureDocker();
   const env = ensureEnv();
+  compose(["up", "-d", "--wait", "db"]);
+  // O serviço de arquivos entra no banco com um usuário interno. Bancos criados antes de ele
+  // existir não têm a senha desse usuário: ela é acertada aqui, toda vez (não muda nada se já estiver certa).
+  execFileSync(
+    "docker",
+    ["compose", "exec", "-T", "db", "psql", "-U", "supabase_admin", "-d", "postgres", "-q", "-v", "ON_ERROR_STOP=1", "-c",
+      `alter user supabase_storage_admin with password '${env.POSTGRES_PASSWORD}'`],
+    { cwd: stackDir, stdio: ["ignore", "ignore", "inherit"] },
+  );
   compose(["up", "-d"]);
   await waitFor("http://localhost:54399/health", "Auth");
   await waitFor("http://localhost:54398/", "API");
+  // (o script SQL cria o bucket "arquivos": as tabelas do armazenamento precisam existir antes)
+  await waitFor("http://localhost:54397/status", "Armazenamento de arquivos");
 
   applySchema();
 
@@ -157,7 +168,7 @@ async function up() {
 
 function reset() {
   psql(
-    "truncate public.activity_log, public.weekly_sales, public.warmups, public.accounts, public.avatars, public.countries, public.phones, public.antidetect_profiles, public.settings cascade",
+    "truncate public.library_items, public.activity_log, public.weekly_sales, public.warmups, public.accounts, public.avatars, public.countries, public.phones, public.antidetect_profiles, public.settings cascade",
   );
   console.log("Dados do painel apagados (usuário de teste mantido).");
 }

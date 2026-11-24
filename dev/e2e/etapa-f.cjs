@@ -3,7 +3,9 @@
 //
 //   node dev/e2e/etapa-f.cjs      (com o app rodando em http://localhost:3000)
 const { chromium } = require("playwright");
+const { execFileSync } = require("node:child_process");
 const { readFileSync } = require("node:fs");
+const { join } = require("node:path");
 const { BASE, USER, psql, resetData, resetTestPassword, ok, section, assert, openPhone, finish, fail } = require("./helpers.cjs");
 
 // Espera o banco chegar a um valor (as gravações da tela levam alguns instantes).
@@ -146,7 +148,7 @@ function unzipStored(bytes) {
   assert(/^central-de-avatares-planilhas-.*\.zip$/.test(sheetsDownload.suggestedFilename()), `as planilhas baixam como ${sheetsDownload.suggestedFilename()}`);
   const files = unzipStored(readFileSync(await sheetsDownload.path()));
   assert(
-    ["LEIA-ME.txt", "paises.csv", "avatares.csv", "contas.csv", "aquecimentos.csv", "vendas.csv", "funis.csv", "celulares.csv", "perfis-anti-detect.csv", "historico.csv"].every((name) => name in files),
+    ["LEIA-ME.txt", "paises.csv", "avatares.csv", "contas.csv", "aquecimentos.csv", "vendas.csv", "funis.csv", "arquivos-e-prompts.csv", "celulares.csv", "perfis-anti-detect.csv", "historico.csv"].every((name) => name in files),
     "o .zip tem uma planilha por assunto e um LEIA-ME",
   );
   const contas = files["contas.csv"].replace(/^﻿/, "").split("\r\n");
@@ -185,7 +187,9 @@ function unzipStored(bytes) {
   await dialog().getByRole("heading", { name: "Falta atualizar o banco (uma vez)" }).waitFor();
   await dialog().getByRole("button", { name: "Copiar script SQL" }).waitFor();
   ok("com o banco desatualizado, a janela explica como rodar o script (e nada é alterado)");
-  psql("create or replace function public.cda_schema_version() returns integer language sql immutable set search_path = '' as $f$ select 3 $f$; notify pgrst, 'reload schema'");
+  // "rodar o script": volta a função como ela é no supabase/schema.sql (e não um número fixo — o script
+  // continua subindo de versão, e os testes seguintes dependem da versão atual)
+  execFileSync("node", [join(__dirname, "..", "local.mjs"), "schema"], { stdio: "ignore" });
   await page.waitForTimeout(1500);
   await dialog().getByRole("button", { name: "Já rodei" }).click();
   await dialog().getByRole("heading", { name: "Restaurar backup" }).waitFor();
