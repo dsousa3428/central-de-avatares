@@ -90,15 +90,24 @@ function AvatarContent({ avatar, tab }: { avatar: Avatar; tab: TabValue }) {
   }
 
   async function remove() {
+    // o que é do avatar mas não se apaga com ele: fica guardado como "geral"
+    const keepsLibrary = db.library.some((item) => item.avatar_id === avatar.id);
+    const keepsTasks = db.tasks.some((task) => task.avatar_id === avatar.id && !task.completed_at);
+    const kept =
+      keepsLibrary && keepsTasks
+        ? "Os arquivos, os prompts e as tarefas dele continuam guardados, como gerais."
+        : keepsLibrary
+          ? "Os arquivos e prompts dele continuam guardados, como gerais."
+          : keepsTasks
+            ? "As tarefas dele continuam guardadas, como gerais."
+            : "";
     const ok = await confirm({
       title: `Apagar o avatar ${avatar.name}?`,
       message: (
         <>
           Isto apaga <strong>tudo</strong> do avatar: {accounts.length === 1 ? "1 conta" : `${accounts.length} contas`},
           histórico, vendas, links, kit e anotações. Esta ação não pode ser desfeita.
-          {db.library.some((item) => item.avatar_id === avatar.id)
-            ? " (Os arquivos e prompts dele continuam guardados, como gerais.)"
-            : null}
+          {kept ? ` (${kept})` : null}
         </>
       ),
       confirmLabel: "Apagar avatar",

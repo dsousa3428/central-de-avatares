@@ -3,7 +3,7 @@
 // Gravações do checklist de reposição (as regras ficam em ./replacement).
 
 import { checklistProgress, readChecklist, setItemDone, syncChecklist, type ChecklistFacts } from "./replacement";
-import { getStore, logActivity, updateRow } from "./store";
+import { getStore, logActivity, updateRow, type UpdateOptions } from "./store";
 import type { Account } from "./types";
 
 /**
@@ -23,8 +23,16 @@ export function syncAccountChecklist(accountId: string, facts: ChecklistFacts): 
 // contas cuja "reposição concluída" já foi registrada nesta sessão (dois toques quase juntos não registram duas vezes)
 const completionLogged = new Set<string>();
 
-/** Marca ou desmarca um item do checklist (a tela responde na hora). */
-export async function setChecklistItem(account: Account, key: string, done: boolean): Promise<void> {
+/**
+ * Marca ou desmarca um item do checklist. No checklist a tela responde na hora;
+ * nas Tarefas (onde a linha some ao dar certo) a gravação espera o banco: `{ optimistic: false }`.
+ */
+export async function setChecklistItem(
+  account: Account,
+  key: string,
+  done: boolean,
+  options: UpdateOptions = { optimistic: true },
+): Promise<void> {
   const wasComplete = checklistProgress(readChecklist(account.checklist)).complete;
   await updateRow(
     "accounts",
@@ -35,7 +43,7 @@ export async function setChecklistItem(account: Account, key: string, done: bool
       const next = setItemDone(list, key, done);
       return next === list ? null : { checklist: next };
     },
-    { optimistic: true },
+    options,
   );
   const store = getStore();
   const now = store.accounts.find((row) => row.id === account.id);

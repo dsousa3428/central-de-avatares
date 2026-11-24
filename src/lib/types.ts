@@ -241,6 +241,30 @@ export interface LibraryItem extends BaseRow {
   updated_at: string;
 }
 
+/** 1 = urgente (vermelho), 2 = alta, 3 = média, 4 = normal (sem cor) — como no Todoist. */
+export type TaskPriority = 1 | 2 | 3 | 4;
+/** Como uma tarefa se repete (ver src/lib/tasks.ts). */
+export type TaskRecurrence = "diaria" | "dias_uteis" | "semanal" | "mensal";
+
+/** Uma tarefa escrita pelo dono (as sugeridas pelo painel não ficam no banco). */
+export interface Task extends BaseRow {
+  /** null = geral (não é de um avatar só). */
+  avatar_id: string | null;
+  title: string;
+  notes: string | null;
+  /** AAAA-MM-DD; null = sem data. */
+  due_date: string | null;
+  /** "HH:MM"; null = o dia todo. */
+  due_time: string | null;
+  /** Leia com `readPriority`. */
+  priority: number;
+  /** Leia com `readRecurrence`. */
+  recurrence: string | null;
+  /** Quando foi feita; null = por fazer. (Tarefa que se repete nunca fica feita: a data anda.) */
+  completed_at: string | null;
+  updated_at: string;
+}
+
 export interface AppPrefs {
   /** Versão dos dados de exemplo já criados (0/ausente = nunca). */
   examples_version?: number;
@@ -271,6 +295,7 @@ export interface Tables {
   weekly_sales: WeeklySale;
   activity_log: ActivityEntry;
   library_items: LibraryItem;
+  tasks: Task;
 }
 
 export type TableName = keyof Tables;

@@ -168,7 +168,7 @@ async function up() {
 
 function reset() {
   psql(
-    "truncate public.library_items, public.activity_log, public.weekly_sales, public.warmups, public.accounts, public.avatars, public.countries, public.phones, public.antidetect_profiles, public.settings cascade",
+    "truncate public.tasks, public.library_items, public.activity_log, public.weekly_sales, public.warmups, public.accounts, public.avatars, public.countries, public.phones, public.antidetect_profiles, public.settings cascade",
   );
   console.log("Dados do painel apagados (usuário de teste mantido).");
 }

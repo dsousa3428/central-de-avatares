@@ -327,7 +327,7 @@ async function waitForTable(token, present) {
 
   // ---------------------------------------------------------------
   section("Restaurar um backup");
-  assert(psql("select public.cda_schema_version()") === "4", "(o banco de testes está na versão atual do script: 4)");
+  assert(Number(psql("select public.cda_schema_version()")) >= 4, "(o banco de testes já sabe restaurar arquivos e prompts: versão 4 ou mais)");
   await page.goto(`${BASE}/configuracoes`);
   await page.getByRole("heading", { name: "Backup", exact: true }).waitFor({ timeout: 30000 });
   await page.getByText(/o backup leva os prompts inteiros e só\s+o nome de cada arquivo/).waitFor();

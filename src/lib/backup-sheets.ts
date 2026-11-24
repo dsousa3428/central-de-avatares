@@ -12,6 +12,7 @@ import { cleanRates, inBRL } from "./sales";
 import { generationLabel, phoneLabel, profileLabel } from "./selectors";
 import type { Db } from "./store";
 import { pendingLabels, structureProgress } from "./structure";
+import { compareTasks, priorityLabel, readPriority, readRecurrence, recurrenceLabel } from "./tasks";
 import type { AccountStatus } from "./types";
 
 export interface Sheet {
@@ -257,6 +258,25 @@ export function buildSheets(db: Db): Sheet[] {
     ]);
   }
 
+  // Tarefas: as escritas pelo dono (as sugeridas pelo painel não ficam guardadas: são calculadas na hora)
+  const tasks: string[][] = [["Tarefa", "Avatar", "Data", "Horário", "Prioridade", "Repete", "Descrição", "Feita em", "Criada em"]];
+  const byState = [...(db.tasks ?? [])].sort((a, b) => Number(Boolean(a.completed_at)) - Number(Boolean(b.completed_at)) || compareTasks(a, b));
+  for (const task of byState) {
+    const priority = readPriority(task.priority);
+    const recurrence = readRecurrence(task.recurrence);
+    tasks.push([
+      task.title,
+      task.avatar_id ? text(avatarOf(task.avatar_id)?.name) : "Geral",
+      date(task.due_date),
+      text(task.due_time),
+      `${priorityLabel(priority)} (P${priority})`,
+      recurrence ? recurrenceLabel(task.recurrence, task.due_date) : "",
+      text(task.notes),
+      moment(task.completed_at),
+      date(task.created_at),
+    ]);
+  }
+
   return [
     { name: "paises", table: countries },
     { name: "avatares", table: avatars },
@@ -265,6 +285,7 @@ export function buildSheets(db: Db): Sheet[] {
     { name: "vendas", table: sales },
     { name: "funis", table: funnels },
     ...(db.libraryReady ? [{ name: "arquivos-e-prompts", table: library }] : []),
+    ...(db.tasksReady ? [{ name: "tarefas", table: tasks }] : []),
     { name: "celulares", table: phones },
     { name: "perfis-anti-detect", table: profiles },
     { name: "historico", table: history },
@@ -285,6 +306,7 @@ export function sheetsReadme(exportedAt: string): string {
     "  vendas.csv              vendas por semana",
     "  funis.csv               funis para modelar: cada avatar modelo e as etapas do funil dele",
     "  arquivos-e-prompts.csv  os prompts e o nome de cada arquivo guardado (os arquivos ficam no Supabase)",
+    "  tarefas.csv             as suas tarefas, por fazer e feitas (as sugeridas pelo painel não ficam guardadas)",
     "  celulares.csv           celulares cadastrados",
     "  perfis-anti-detect.csv  perfis do navegador anti-detect",
     "  historico.csv           linha do tempo das contas",

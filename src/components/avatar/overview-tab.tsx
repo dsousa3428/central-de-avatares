@@ -12,6 +12,7 @@ import { AccountStatusBadge, AvatarStatusBadge } from "@/components/ui/badge";
 import { Button, buttonClass } from "@/components/ui/button";
 import { Section } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
+import { AvatarTasks } from "@/components/tasks/avatar-tasks";
 import { StructureSection } from "./structure-section";
 
 interface OverviewTabProps {
@@ -129,6 +130,8 @@ export function OverviewTab({ avatar, country, account, onEdit, onGoTo, onNewAcc
           <p className="py-2 text-sm text-muted">Nenhum link cadastrado ainda. Adicione na aba Links.</p>
         )}
       </Section>
+
+      {db.tasksReady ? <AvatarTasks avatar={avatar} /> : null}
 
       {db.libraryReady ? <LibraryShortcut avatar={avatar} /> : null}
     </div>

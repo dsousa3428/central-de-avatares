@@ -26,6 +26,7 @@ const LABELS: Array<[keyof ReturnType<typeof backupCounts>, string, string]> = [
   ["weekly_sales", "lançamento de vendas", "lançamentos de vendas"],
   ["activity_log", "registro na linha do tempo", "registros na linha do tempo"],
   ["library_items", "item em Arquivos e prompts", "itens em Arquivos e prompts"],
+  ["tasks", "tarefa", "tarefas"],
 ];
 
 function when(iso: string): string {
@@ -122,8 +123,10 @@ function RestoreDialog({ file, name, onClose }: { file: BackupFile; name: string
     void refresh();
   }, []);
 
-  // Um backup com arquivos e prompts precisa da versão do banco que sabe restaurá-los (4); os outros, da 3.
-  const needs = (file.tables.library_items?.length ?? 0) > 0 ? 4 : 3;
+  // Cada tabela que veio depois precisa da versão do banco que sabe restaurá-la:
+  // tarefas, 5; arquivos e prompts, 4; o resto, 3.
+  const needs =
+    (file.tables.tasks?.length ?? 0) > 0 ? 5 : (file.tables.library_items?.length ?? 0) > 0 ? 4 : 3;
   useEffect(() => {
     let active = true;
     schemaVersion()

@@ -216,6 +216,47 @@ async function scanWidth(WIDTH) {
     await p.getByRole('link', { name: 'Vendas' }).click();
     await p.getByRole('heading', { name: 'Vendas', exact: true }).waitFor();
   }
+  // Tarefas: as quatro listas, a frase entendida (com a sugestão do dia de descanso) e as janelas
+  {
+    const uid = psql("select user_id from public.avatars where name = 'Fra'' Salvio'");
+    const fra = psql("select id from public.avatars where name = 'Fra'' Salvio'");
+    psql(`insert into public.tasks (user_id, avatar_id, title, notes, due_date, due_time, priority, recurrence, completed_at) values
+      ('${uid}', '${fra}', 'Gravar 3 vídeos da horta', 'Horta, chá e bastidores', current_date, '14:30', 1, 'semanal', null),
+      ('${uid}', null, 'Pagar o domínio', null, current_date - 2, null, 2, null, null),
+      ('${uid}', '${fra}', 'Revisar o checkout', null, current_date + 3, null, 3, 'mensal:31', null),
+      ('${uid}', null, 'Responder os directs', null, null, null, 4, null, now())`);
+    await p.reload();
+    await p.getByRole('heading', { name: 'Vendas', exact: true }).waitFor({ timeout: 30000 });
+    await p.getByRole('button', { name: 'Mais', exact: true }).click();
+    await dialog().getByRole('link', { name: 'Tarefas' }).click();
+    await p.getByRole('heading', { name: 'Tarefas', exact: true }).waitFor();
+    await p.getByRole('heading', { name: 'Atrasadas', exact: true }).waitFor();
+    await scan('Tarefas · Hoje');
+    await p.screenshot({ path: OUT + `${WIDTH}-tarefas.png`, fullPage: true });
+    await p.locator('[aria-label="Nova tarefa"]:visible').fill('Escrever o e-mail #salvio p2');
+    await p.getByRole('button', { name: /^Sugestão: / }).waitFor();
+    await scan('Tarefas · frase entendida');
+    await p.locator('[aria-label="Nova tarefa"]:visible').fill('');
+    for (const name of ['Em breve', 'Todas', 'Feitas']) {
+      await p.getByRole('radiogroup', { name: 'Mostrar' }).getByRole('radio', { name, exact: true }).click();
+      await scan(`Tarefas · ${name}`);
+    }
+    await p.getByRole('radiogroup', { name: 'Mostrar' }).getByRole('radio', { name: 'Hoje', exact: true }).click();
+    await p.getByRole('button', { name: 'Detalhada' }).click();
+    await dialog().getByRole('heading', { name: 'Nova tarefa' }).waitFor();
+    await dialog().getByLabel('Avatar').selectOption({ label: "🇮🇹 Fra' Salvio" });
+    await scan('nova tarefa (com Descanso da conta)'); await close();
+    await p.getByRole('button', { name: 'Editar: Gravar 3 vídeos da horta' }).click();
+    await dialog().getByRole('heading', { name: 'Editar tarefa' }).waitFor();
+    await scan('editar tarefa (com Apagar)');
+    await p.screenshot({ path: OUT + `${WIDTH}-tarefa.png` });
+    await close();
+    psql('delete from public.tasks');
+    await p.reload();
+    await p.getByRole('heading', { name: 'Tarefas', exact: true }).waitFor({ timeout: 30000 });
+    await p.getByRole('link', { name: 'Vendas' }).click();
+    await p.getByRole('heading', { name: 'Vendas', exact: true }).waitFor();
+  }
   // Vendas pela Stripe: as três caras da janela (as respostas das rotas são simuladas aqui mesmo)
   const reply = (body) => (request) => request.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
   const closeStripe = async () => { await dialog().getByRole('button', { name: 'Fechar', exact: true }).last().click(); await p.waitForFunction(() => !document.querySelector('dialog[open]')); };

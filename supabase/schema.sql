@@ -265,6 +265,30 @@ create index if not exists library_items_avatar_idx on public.library_items (ava
 
 
 -- ---------------------------------------------------------------------
+-- TAREFAS (a lista de coisas a fazer, no estilo do Todoist)
+-- As tarefas que o próprio painel sugere (estrutura, funis, aquecimento…) não
+-- ficam aqui: elas são calculadas na hora, a partir dos dados de cada avatar.
+-- ---------------------------------------------------------------------
+create table if not exists public.tasks (
+  id            uuid primary key default gen_random_uuid(),
+  user_id       uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  avatar_id     uuid references public.avatars (id) on delete set null,  -- vazio = geral
+  title         text not null,
+  notes         text,
+  due_date      date,                                -- vazio = sem data
+  due_time      text check (due_time is null or due_time ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'),
+  priority      smallint not null default 4 check (priority between 1 and 4),  -- 1 = urgente … 4 = normal
+  recurrence    text,                                -- diaria, dias_uteis, semanal, mensal (vazio = não repete)
+  completed_at  timestamptz,                         -- vazio = por fazer
+  is_example    boolean not null default false,
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now()
+);
+
+create index if not exists tasks_avatar_idx on public.tasks (avatar_id);
+
+
+-- ---------------------------------------------------------------------
 -- SEGURANÇA: Row Level Security + permissões + gatilhos
 -- ---------------------------------------------------------------------
 do $$
@@ -273,7 +297,7 @@ declare
 begin
   foreach t in array array[
     'countries', 'phones', 'antidetect_profiles', 'avatars', 'accounts',
-    'warmups', 'weekly_sales', 'activity_log', 'settings', 'library_items'
+    'warmups', 'weekly_sales', 'activity_log', 'settings', 'library_items', 'tasks'
   ]
   loop
     -- liga o RLS
@@ -341,14 +365,14 @@ $$;
 -- VERSÃO DA ESTRUTURA
 -- O painel pergunta este número quando uma tela depende de algo que foi
 -- acrescentado depois (2: a troca da senha-mestra; 3: restaurar backup;
--- 4: arquivos e prompts). Aumente ao acrescentar.
+-- 4: arquivos e prompts; 5: tarefas). Aumente ao acrescentar.
 -- ---------------------------------------------------------------------
 create or replace function public.cda_schema_version()
 returns integer
 language sql
 immutable
 set search_path = ''
-as $$ select 4 $$;
+as $$ select 5 $$;
 
 revoke all on function public.cda_schema_version() from public, anon;
 grant execute on function public.cda_schema_version() to authenticated;
@@ -447,6 +471,8 @@ declare
   cfg jsonb;
   has_library boolean;
   links jsonb := '{}'::jsonb;
+  has_tasks boolean;
+  task_links jsonb := '{}'::jsonb;
 begin
   if uid is null then
     raise exception 'cda_restore_no_user' using errcode = '28000';
@@ -467,6 +493,15 @@ begin
   else
     select coalesce(jsonb_object_agg(id::text, avatar_id), '{}'::jsonb) into links
       from public.library_items
+     where user_id = uid and avatar_id is not null;
+  end if;
+  -- Tarefas: o mesmo cuidado (backup de antes delas não traz a lista).
+  has_tasks := jsonb_typeof(data -> 'tasks') = 'array';
+  if has_tasks then
+    delete from public.tasks where user_id = uid;
+  else
+    select coalesce(jsonb_object_agg(id::text, avatar_id), '{}'::jsonb) into task_links
+      from public.tasks
      where user_id = uid and avatar_id is not null;
   end if;
 
@@ -516,6 +551,17 @@ begin
      where l.user_id = uid
        and links ? l.id::text
        and exists (select 1 from public.avatars a where a.user_id = uid and a.id = (links ->> l.id::text)::uuid);
+  end if;
+  if has_tasks then
+    insert into public.tasks
+      select (jsonb_populate_record(null::public.tasks, item || jsonb_build_object('user_id', uid))).*
+        from jsonb_array_elements(data -> 'tasks') as item;
+  else
+    update public.tasks t
+       set avatar_id = (task_links ->> t.id::text)::uuid
+     where t.user_id = uid
+       and task_links ? t.id::text
+       and exists (select 1 from public.avatars a where a.user_id = uid and a.id = (task_links ->> t.id::text)::uuid);
   end if;
 
   -- 3) configurações (o cofre vem junto: sem ele as senhas cifradas não abririam)

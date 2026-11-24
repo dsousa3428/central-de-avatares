@@ -23,6 +23,12 @@ const S = SHOTS + '/';
   psql(`insert into public.library_items (user_id, avatar_id, title, category, content, notes, file_path, file_name, file_size, file_type) values
     ('${uid}', '${aid}', 'Prompt ${long}${long} ${long}', 'imagem', '${long}${long}${long}${long} ${long}\n${long}${long}${long}', '${long}${long}${long}', null, null, null, null),
     ('${uid}', '${aid}', 'Arquivo ${long}${long}${long}', 'texto', null, '${long}${long}', '${uid}/x/abc-${long}.pdf', '${long}${long}${long}.pdf', 123456789, 'application/pdf')`);
+  // tarefas com tudo comprido (título, descrição, avatar de nome enorme): de hoje, atrasada, dos próximos dias e feita
+  psql(`insert into public.tasks (user_id, avatar_id, title, notes, due_date, due_time, priority, recurrence, completed_at) values
+    ('${uid}', '${aid}', 'Tarefa ${long}${long} ${long}', '${long}${long}${long}\n${long}', current_date, '14:30', 1, 'semanal', null),
+    ('${uid}', '${aid}', '${long}${long}${long}', null, current_date - 3, null, 2, null, null),
+    ('${uid}', null, 'Geral ${long}${long}', '${long}${long}', current_date + 2, null, 3, 'mensal:31', null),
+    ('${uid}', '${aid}', 'Feita ${long}${long}', null, null, null, 4, null, now())`);
   psql(`insert into public.accounts (user_id, avatar_id, generation, handle, email, status, phone_id, profile_id, proxy, followers, notes) values ('${uid}', '${aid}', 1, 'dottoressa.${long.toLowerCase()}.${long.toLowerCase()}', '${long.toLowerCase()}.${long.toLowerCase()}@${long.toLowerCase()}.exemplo.com', 'ativa', '${pid}', '${prid}', 'usuario:senha@${long}${long}.exemplo.net:8000', 123456789, '${long}${long}${long}')`);
   psql(`update public.countries set warmup_tags = warmup_tags || array['#${long}${long}${long}'], notes = '${long}${long}${long}${long}'`);
   psql(`update public.accounts set status = 'aquecendo' where handle like 'dottoressa%'`);
@@ -140,6 +146,28 @@ const S = SHOTS + '/';
     const extra = await page.evaluate(() => { const p = document.querySelector('dialog[open] .cda-dialog-panel'); const b = p.querySelector('.overflow-y-auto'); return b.scrollWidth - b.clientWidth; });
     results.push(`${extra > 0 ? '✗' : '✓'} formulario-arquivo${extra > 0 ? ` (sobra ${extra}px)` : ''}`);
     await page.screenshot({ path: `${S}90-stress-formulario-arquivo.png` });
+  }
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector('dialog[open]'));
+  // Tarefas: as quatro listas, a frase entendida com o avatar de nome enorme, e a janela de editar
+  await s.more('Tarefas');
+  await page.getByRole('heading', { name: 'Atrasadas', exact: true }).waitFor();
+  await page.locator('[aria-label="Nova tarefa"]:visible').fill(`Escrever ${long}${long} amanhã 14h p1 #dottoressa toda segunda`);
+  await page.getByRole('button', { name: 'Não usar como avatar' }).waitFor();
+  await check('tarefas-hoje');
+  await page.locator('[aria-label="Nova tarefa"]:visible').fill('');
+  for (const [name, label] of [['Em breve', 'tarefas-em-breve'], ['Todas', 'tarefas-todas'], ['Feitas', 'tarefas-feitas']]) {
+    await page.getByRole('radiogroup', { name: 'Mostrar' }).getByRole('radio', { name, exact: true }).click();
+    await check(label);
+  }
+  await page.getByRole('radiogroup', { name: 'Mostrar' }).getByRole('radio', { name: 'Hoje', exact: true }).click();
+  await page.getByRole('button', { name: /^Editar: Tarefa / }).click();
+  await page.locator('dialog[open]').getByRole('heading', { name: 'Editar tarefa' }).waitFor();
+  await page.waitForTimeout(500);
+  {
+    const extra = await page.evaluate(() => { const p = document.querySelector('dialog[open] .cda-dialog-panel'); const b = p.querySelector('.overflow-y-auto'); return b.scrollWidth - b.clientWidth; });
+    results.push(`${extra > 0 ? '✗' : '✓'} formulario-tarefa${extra > 0 ? ` (sobra ${extra}px)` : ''}`);
+    await page.screenshot({ path: `${S}90-stress-formulario-tarefa.png` });
   }
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => !document.querySelector('dialog[open]'));

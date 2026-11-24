@@ -35,6 +35,7 @@ import type { Account, AccountStatus, Avatar, Country } from "@/lib/types";
 import { setSearchOpen } from "@/lib/ui-state";
 import { markDay } from "@/lib/warmup-actions";
 import { ExamplesNotice } from "@/components/common/examples-notice";
+import { TodayTasks } from "@/components/tasks/today-tasks";
 import { PageHeader } from "@/components/shell/page-header";
 import { AvatarPhoto } from "@/components/ui/avatar-photo";
 import { AccountStatusBadge, Badge } from "@/components/ui/badge";
@@ -180,6 +181,8 @@ export function TodayScreen() {
             </ul>
           )}
         </section>
+
+        <TodayTasks />
 
         {building.length > 0 ? (
           <Section title="Montar a estrutura" subtitle="Enquanto as contas aquecem: site, entregável, checkout e automação.">

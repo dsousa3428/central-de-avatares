@@ -6,6 +6,8 @@
 // ninguém lê as senhas, com ou sem o arquivo. Na restauração os ids são mantidos:
 // o bloco cifrado de cada conta só abre com o id da própria conta.
 //
+// Tarefas (`tasks`) seguem a mesma regra: tabela opcional (versão 5 do script).
+//
 // Arquivos e prompts (`library_items`) vão junto — os prompts inteiros, e de cada
 // arquivo só o nome e onde ele está: o arquivo em si continua no armazenamento do
 // Supabase. A tabela é opcional no backup: um arquivo feito antes de ela existir
@@ -31,15 +33,19 @@ export const BACKUP_TABLES = [
   "weekly_sales",
   "activity_log",
   "library_items",
+  "tasks",
 ] as const satisfies readonly TableName[];
 
 export type BackupTable = (typeof BACKUP_TABLES)[number];
 
 /** Tabelas que um backup pode não trazer (vieram depois do formato 1). */
-export const OPTIONAL_TABLES: ReadonlySet<BackupTable> = new Set<BackupTable>(["library_items"]);
+export const OPTIONAL_TABLES: ReadonlySet<BackupTable> = new Set<BackupTable>(["library_items", "tasks"]);
 
 type Rows = Array<Record<string, unknown>>;
-export type BackupTables = { [T in Exclude<BackupTable, "library_items">]: Rows } & { library_items?: Rows };
+export type BackupTables = { [T in Exclude<BackupTable, "library_items" | "tasks">]: Rows } & {
+  library_items?: Rows;
+  tasks?: Rows;
+};
 
 export interface BackupSettings {
   vault: Record<string, unknown> | null;
@@ -67,6 +73,7 @@ const KEY_OF: Record<BackupTable, keyof Db> = {
   weekly_sales: "sales",
   activity_log: "activity",
   library_items: "library",
+  tasks: "tasks",
 };
 
 /** Tira o dono da linha: quem restaura é o dono de quem está com o login aberto. */
@@ -83,6 +90,7 @@ export function buildBackup(db: Db, now: Date): BackupFile {
     // sem a tabela no banco (script SQL ainda não atualizado), o backup não a leva: restaurá-lo
     // não mexe nos arquivos e prompts de ninguém
     if (table === "library_items" && !db.libraryReady) continue;
+    if (table === "tasks" && !db.tasksReady) continue;
     const rows = (db[KEY_OF[table]] ?? []) as unknown as Array<Tables[typeof table]>;
     tables[table] = rows.map(withoutOwner);
   }
@@ -190,6 +198,7 @@ export function parseBackup(text: string): BackupFile {
     ["activity_log", "avatar_id", "avatars", false],
     ["activity_log", "account_id", "accounts", false],
     ["library_items", "avatar_id", "avatars", false],
+    ["tasks", "avatar_id", "avatars", false],
   ];
   for (const [table, column, target, required] of refs) {
     for (const row of tables[table] ?? []) {

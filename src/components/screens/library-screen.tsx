@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Database, FolderOpen, Plus, RefreshCw, Search, TriangleAlert, Upload } from "lucide-react";
+import { FolderOpen, Plus, Search, TriangleAlert, Upload } from "lucide-react";
 import { plural } from "@/lib/format";
 import {
   CATEGORIES,
@@ -15,19 +15,18 @@ import {
   type LibraryFilter,
   type LibraryShow,
 } from "@/lib/library";
-import { getStore, refresh, useStore } from "@/lib/store";
+import { getStore, useStore } from "@/lib/store";
 import type { LibraryCategory, LibraryItem } from "@/lib/types";
-import { CopySchemaButton } from "@/components/common/copy-schema-button";
+import { SchemaUpdateCard } from "@/components/common/schema-update-card";
 import { ItemForm } from "@/components/library/item-form";
 import { LibraryRow } from "@/components/library/library-row";
 import { UploadDialog } from "@/components/library/upload-dialog";
 import { useFileLinks } from "@/components/library/use-file-links";
 import { PageHeader } from "@/components/shell/page-header";
 import { Button } from "@/components/ui/button";
-import { Callout, Card, EmptyState, Section } from "@/components/ui/card";
+import { Callout, Card, EmptyState } from "@/components/ui/card";
 import { Input, Select } from "@/components/ui/field";
 import { Segmented } from "@/components/ui/tabs";
-import { useToast } from "@/components/ui/toast";
 
 /** Arquivos e prompts: prompts para copiar e arquivos guardados (fotos, PDFs, vídeos, áudios). */
 export function LibraryScreen() {
@@ -79,7 +78,10 @@ export function LibraryScreen() {
     return (
       <>
         <PageHeader title="Arquivos e prompts" subtitle="Prompts para copiar e arquivos guardados (fotos, PDFs, vídeos)." />
-        <LibrarySetup />
+        <SchemaUpdateCard ready={() => getStore().libraryReady}>
+          Para guardar arquivos e prompts, o banco de dados precisa de uma parte nova: uma tabela e um lugar{" "}
+          <strong>privado</strong> para os arquivos, que só o seu login abre.
+        </SchemaUpdateCard>
       </>
     );
   }
@@ -250,57 +252,5 @@ function Usage({ prompts, files, bytes }: { prompts: number; files: number; byte
         guarde os arquivos grandes no Google Drive e cole o link nas anotações).
       </p>
     </Callout>
-  );
-}
-
-/** O banco ainda não tem a tabela nem o lugar dos arquivos: o passo a passo do script. */
-function LibrarySetup() {
-  const toast = useToast();
-  const [checking, setChecking] = useState(false);
-
-  async function check() {
-    setChecking(true);
-    try {
-      await refresh();
-    } finally {
-      setChecking(false);
-    }
-    if (!getStore().libraryReady) {
-      toast.error("Ainda não encontrei a parte nova do banco. Confira se o script rodou até o fim (aparece “Tudo certo!”).");
-    }
-  }
-
-  return (
-    <Section title="Falta atualizar o banco (uma vez só)">
-      <div className="space-y-3 text-[15px] leading-relaxed">
-        <p className="flex gap-2">
-          <Database className="mt-1 size-4 shrink-0 text-muted" aria-hidden />
-          <span>
-            Para guardar arquivos e prompts, o banco de dados precisa de uma parte nova: uma tabela e um lugar{" "}
-            <strong>privado</strong> para os arquivos, que só o seu login abre. Ela entra quando você roda o script SQL
-            atualizado:
-          </span>
-        </p>
-        <ol className="list-decimal space-y-1.5 pl-5 marker:font-semibold marker:text-muted">
-          <li>
-            Toque em <strong>Copiar script SQL</strong>, aqui embaixo.
-          </li>
-          <li>
-            No site do Supabase, abra o seu projeto, vá em <strong>SQL Editor</strong>, cole o script e toque em{" "}
-            <strong>Run</strong>. Deve aparecer <em>“Tudo certo!”</em>.
-          </li>
-          <li>
-            Volte aqui e toque em <strong>Já rodei</strong>.
-          </li>
-        </ol>
-        <p className="text-sm text-muted">Rodar o script de novo é seguro: ele só cria o que falta e nunca apaga dados.</p>
-        <div className="flex flex-wrap gap-2">
-          <CopySchemaButton />
-          <Button onClick={() => void check()} loading={checking}>
-            <RefreshCw className="size-4" /> Já rodei
-          </Button>
-        </div>
-      </div>
-    </Section>
   );
 }
