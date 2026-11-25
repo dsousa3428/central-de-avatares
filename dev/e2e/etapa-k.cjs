@@ -21,6 +21,7 @@ const ANON = stackEnv.ANON_KEY;
 
 // O navegador do teste está em UTC, como o banco local: "hoje" é o mesmo dia para os dois.
 const iso = (days) => new Date(Date.now() + days * 86400000).toISOString().slice(0, 10);
+const weekdayOf = (date) => new Date(`${date}T12:00:00Z`).getUTCDay();
 
 // Espera o banco chegar a um valor (as gravações da tela levam alguns instantes).
 async function db(sql, expected, message) {
@@ -211,6 +212,47 @@ async function waitForTable(token, present) {
   await db(task("Responder directs", "due_date || '|' || (completed_at is null)"), `${tomorrow}|true`, "a que se repete não fica feita: a data anda para a próxima vez");
 
   // ---------------------------------------------------------------
+  section("Mudar a data com um toque (o calendário de cada tarefa)");
+  const dateButton = (title) => page.getByRole("button", { name: `Mudar a data: ${title}`, exact: true });
+  await page.getByText("Toque numa tarefa para editar tudo; no calendário").waitFor();
+  await dateButton("Ligar para o fornecedor sexta").click();
+  await dialog().getByRole("heading", { name: "Mudar a data" }).waitFor();
+  await dialog().getByText("Agora:").waitFor();
+  assert(await dialog().getByRole("button", { name: /^Hoje/ }).isDisabled(), "a data de agora aparece marcada");
+  await dialog().getByRole("button", { name: /^Amanhã/ }).click();
+  await toast("Nova data: Amanhã");
+  await noDialog();
+  await db(task("Ligar para o fornecedor sexta", "due_date"), tomorrow, "“Amanhã” muda a data com um toque");
+  await view("Em breve").click();
+  await dateButton("Ligar para o fornecedor sexta").click();
+  await dialog().getByLabel("Data").fill(iso(10));
+  await dialog().getByLabel("Horário").fill("09:15");
+  await dialog().getByRole("button", { name: "Salvar a data" }).click();
+  await toast("Nova data:");
+  await noDialog();
+  await db(task("Ligar para o fornecedor sexta", "due_date || '|' || due_time"), `${iso(10)}|09:15`, "“Outro dia” guarda o dia e o horário escolhidos");
+  await dateButton("Ligar para o fornecedor sexta").click();
+  await dialog().getByRole("button", { name: "Sem data", exact: true }).click();
+  await toast("Tarefa sem data");
+  await noDialog();
+  await db(task("Ligar para o fornecedor sexta", "coalesce(due_date::text, '-') || '|' || coalesce(due_time, '-')"), "-|-", "“Sem data” tira a data e o horário");
+  await view("Todas").click();
+  await dateButton("Ligar para o fornecedor sexta").click();
+  await dialog().getByRole("button", { name: /^Hoje/ }).click();
+  await toast("Nova data: Hoje");
+  await noDialog();
+  await db(task("Ligar para o fornecedor sexta", "due_date"), today, "e “Hoje” traz de volta");
+  // a que se repete não fica sem data; "Editar tudo" abre a janela completa
+  await dateButton("Responder directs").click();
+  await dialog().getByText(/Esta tarefa se repete/).waitFor();
+  assert((await dialog().getByRole("button", { name: "Sem data", exact: true }).count()) === 0, "a que se repete não oferece “Sem data”");
+  await dialog().getByRole("button", { name: "Editar tudo" }).click();
+  await dialog().getByRole("heading", { name: "Editar tarefa" }).waitFor();
+  assert((await dialog().getByLabel("O que fazer").inputValue()) === "Responder directs", "“Editar tudo” abre a janela completa da tarefa");
+  await dialog().getByRole("button", { name: "Cancelar", exact: true }).click();
+  await noDialog();
+
+  // ---------------------------------------------------------------
   section("Editar, criar com detalhes e apagar");
   await view("Todas").click();
   await edit("Gravar vídeos").click();
@@ -230,9 +272,9 @@ async function waitForTable(token, present) {
   ok("sem o que fazer, a janela avisa");
   await dialog().getByLabel("O que fazer").fill("Revisar o checkout");
   await dialog().getByLabel("Avatar").selectOption({ label: "🇮🇹 Fra' Salvio" });
-  // a conta de exemplo está aquecendo: hoje é dia de uso e amanhã, de descanso
-  await dialog().getByRole("button", { name: /^Descanso da conta \(/ }).click();
-  assert((await dialog().getByLabel("Data").inputValue()) === tomorrow, "“Descanso da conta” põe a data no próximo dia de descanso dela");
+  // a conta de exemplo está aquecendo: hoje é dia de uso e amanhã, de descanso (o atalho "Amanhã" diz isso)
+  await dialog().getByRole("button", { name: "Amanhã (descanso da conta)", exact: true }).click();
+  assert((await dialog().getByLabel("Data").inputValue()) === tomorrow, "o atalho avisa que amanhã é o dia de descanso da conta do avatar");
   await save();
   await toast("Tarefa adicionada");
   await noDialog();
@@ -248,14 +290,19 @@ async function waitForTable(token, present) {
 
   // ---------------------------------------------------------------
   section("Atrasadas");
-  psql(`insert into public.tasks (user_id, title, due_date, priority) values ('${uid}', 'Pagar o domínio', '${iso(-2)}', 1)`);
+  psql(`insert into public.tasks (user_id, title, due_date, priority, recurrence) values ('${uid}', 'Pagar o domínio', '${iso(-2)}', 1, null), ('${uid}', 'Backup das contas', '${iso(-2)}', 3, 'semanal')`);
   await reloadTasks();
   await page.getByRole("heading", { name: "Atrasadas", exact: true }).waitFor();
-  await page.getByText("(atrasada)").waitFor();
-  ok("a tarefa de anteontem aparece em Atrasadas");
+  await page.getByText("(atrasada)").first().waitFor();
+  ok("as tarefas de anteontem aparecem em Atrasadas");
   await page.getByRole("button", { name: "Passar para hoje" }).click();
   await toast("Atrasadas passadas para hoje");
   await db(task("Pagar o domínio", "due_date"), today, "“Passar para hoje” muda a data");
+  await db(
+    task("Backup das contas", "due_date || '|' || recurrence"),
+    `${today}|semanal:${weekdayOf(iso(-2))}`,
+    "a que se repete muda só desta vez: a repetição continua no mesmo dia da semana",
+  );
   assert((await page.getByRole("heading", { name: "Atrasadas", exact: true }).count()) === 0, "e a seção some");
 
   // ---------------------------------------------------------------
@@ -304,15 +351,34 @@ async function waitForTable(token, present) {
   await shot("k50-descanso");
   await input().fill("Escrever o e-mail de boas-vindas #salvio");
   await understood().getByRole("button", { name: /^Sugestão: .* \(@fra\.salvio descansa\)$/ }).click();
+  // um horário escrito depois não troca o dia escolhido pela sugestão
+  await input().fill("Escrever o e-mail de boas-vindas #salvio 14h");
+  await understood().getByText("14:00", { exact: true }).waitFor();
   await input().press("Enter");
   await toast("Tarefa adicionada");
   // depois do descanso de hoje (dia 6) vem o uso (7) e o próximo descanso (8): depois de amanhã
-  await db(task("Escrever o e-mail de boas-vindas", `due_date || '|' || (avatar_id = '${fra}')`), `${iso(2)}|true`, "a sugestão põe a tarefa no próximo dia de descanso da conta");
+  await db(
+    task("Escrever o e-mail de boas-vindas", `due_date || '|' || due_time || '|' || (avatar_id = '${fra}')`),
+    `${iso(2)}|14:00|true`,
+    "a sugestão põe a tarefa no próximo dia de descanso da conta (e o horário escrito depois não troca o dia)",
+  );
   await check("Montar a automação").click();
   await toast("Feito — marcado no painel");
   await db(`select kit -> 'structure' ->> 'automacao' from public.avatars where id = '${fra}'`, "true", "concluir marca o passo na estrutura do avatar");
   await page.getByText(/Dica do dia:/).waitFor({ state: "detached" });
   ok("com a estrutura completa, a dica some");
+  // o calendário de uma tarefa do avatar também oferece o próximo descanso da conta (depois de amanhã)
+  await view("Em breve").click();
+  await dateButton("Gravar vídeos").click();
+  await dialog().getByRole("button", { name: /dia de descanso de @fra\.salvio/ }).click();
+  await toast("Nova data:");
+  await noDialog();
+  await db(
+    task("Gravar vídeos", "due_date || '|' || due_time || '|' || recurrence"),
+    `${iso(2)}|14:00|semanal:${weekdayOf(tomorrow)}`,
+    "“Mudar a data” oferece o próximo descanso da conta (o horário continua, e a repetição segue no mesmo dia da semana)",
+  );
+  await view("Hoje").click();
 
   // ---------------------------------------------------------------
   section("Vídeos para modelar e o atalho para o lugar de cada coisa");
@@ -331,7 +397,8 @@ async function waitForTable(token, present) {
 
   // ---------------------------------------------------------------
   section("Tela Hoje e página do avatar");
-  await page.goto(`${BASE}/`);
+  // (sem recarregar: a tela Tarefas continua montada, na lista Todas e filtrada pelo Fra' Salvio)
+  await page.getByRole("link", { name: /^Hoje/ }).click();
   await page.getByRole("heading", { name: "Minhas tarefas", exact: true }).waitFor({ timeout: 30000 });
   await edit("Pagar o domínio").waitFor();
   await edit("Ligar para o fornecedor sexta").waitFor();
@@ -344,6 +411,9 @@ async function waitForTable(token, present) {
   await shot("k60-tela-hoje");
   await page.getByRole("link", { name: /^Ver (a sugestão|as \d+ sugestões) do painel$/ }).click();
   await page.getByRole("heading", { name: "Tarefas", exact: true }).waitFor();
+  await page.waitForURL(`${BASE}/tarefas`);
+  assert((await view("Hoje").getAttribute("aria-checked")) === "true", "o atalho abre a lista de hoje (mesmo que a tela estivesse em outra lista)");
+  assert((await control("Avatar").inputValue()) === "todos", "com todos os avatares");
   ok("o atalho “Ver as … sugestões do painel” abre a tela Tarefas");
 
   await page.goto(`${BASE}/avatar?id=${fra}`);
@@ -410,6 +480,29 @@ async function waitForTable(token, present) {
   await view("Todas").click();
   await edit("Gravar vídeos").waitFor();
   assert((await page.getByRole("heading", { name: "🇮🇹 Fra' Salvio", exact: true }).count()) === 0, "e a tela mostra todas como gerais");
+  // (o banco também mudou a versão delas ao tirar o avatar: concluir não pode dar "alterado em outro aparelho")
+  await check("Revisar a bio").click();
+  await toast("Tarefa concluída");
+  await db(task("Revisar a bio", "completed_at is not null"), "true", "concluir uma tarefa do avatar apagado funciona de primeira");
+
+  // ---------------------------------------------------------------
+  section("Apagar exemplos: o avatar de exemplo com tarefas do dono fica (e deixa de ser exemplo)");
+  resetData(); // o próximo carregamento cria os exemplos de novo
+  await page.goto(`${BASE}/`);
+  await page.getByRole("heading", { name: "Hoje", exact: true }).waitFor({ timeout: 30000 });
+  const example = psql("select id from public.avatars where name = 'Fra'' Salvio' and is_example");
+  psql(`insert into public.tasks (user_id, avatar_id, title) values ('${uid}', '${example}', 'Tarefa do dono')`);
+  await more("Configurações");
+  await page.getByRole("button", { name: "Apagar exemplos" }).click();
+  await dialog().getByRole("button", { name: "Apagar exemplos" }).click();
+  await toast("Exemplos apagados");
+  await db(
+    "select count(*)::text || '|' || bool_or(is_example)::text from public.avatars where name = 'Fra'' Salvio'",
+    "1|false",
+    "o avatar de exemplo com uma tarefa do dono não é apagado (só perde a marca de exemplo)",
+  );
+  assert(psql(task("Tarefa do dono", `avatar_id = '${example}'`)) === "true", "e a tarefa continua ligada a ele");
+  assert(psql("select count(*) from public.accounts where is_example") === "0", "(as contas de exemplo foram apagadas)");
 
   rmSync(temp, { recursive: true, force: true });
   resetData();

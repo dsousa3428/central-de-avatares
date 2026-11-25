@@ -422,6 +422,17 @@ async function idsWhere(table: string, column: string, values: string[]): Promis
   return new Set(rows.map((r) => r[column]).filter((v): v is string => Boolean(v)));
 }
 
+/** Como `idsWhere`, para as tabelas que o banco pode ainda não ter (script SQL antigo): sem a tabela, ninguém. */
+async function optionalIdsWhere(table: "tasks" | "library_items", column: string, values: string[]): Promise<Set<string>> {
+  try {
+    return await idsWhere(table, column, values);
+  } catch (err) {
+    const error = toAppError(err);
+    if (error.kind === "schema" && (error.code === "PGRST205" || error.code === "42P01")) return new Set();
+    throw error;
+  }
+}
+
 async function exampleIds(table: string): Promise<string[]> {
   const { data, error } = await getSupabase().from(table).select("id").eq("is_example", true);
   if (error) throw toAppError(error);
@@ -472,11 +483,16 @@ export async function deleteExamples(): Promise<void> {
   await deleteIds("warmups", await exampleIds("warmups"));
   await deleteIds("accounts", await exampleIds("accounts"));
 
-  // 2) avatares de exemplo: só apaga os que ficaram sem contas e sem vendas
+  // 2) avatares de exemplo: só apaga os que ficaram sem contas, sem vendas e sem nada do dono
+  //    (tarefas, arquivos e prompts — nenhum deles é exemplo: quem os pôs ali foi o dono)
   const avatarIds = await exampleIds("avatars");
   const avatarsWithAccounts = await idsWhere("accounts", "avatar_id", avatarIds);
   const avatarsWithSales = await idsWhere("weekly_sales", "avatar_id", avatarIds);
-  const avatarsToKeep = avatarIds.filter((id) => avatarsWithAccounts.has(id) || avatarsWithSales.has(id));
+  const avatarsWithTasks = await optionalIdsWhere("tasks", "avatar_id", avatarIds);
+  const avatarsWithLibrary = await optionalIdsWhere("library_items", "avatar_id", avatarIds);
+  const avatarsToKeep = avatarIds.filter(
+    (id) => avatarsWithAccounts.has(id) || avatarsWithSales.has(id) || avatarsWithTasks.has(id) || avatarsWithLibrary.has(id),
+  );
   await keepIds("avatars", avatarsToKeep);
   await deleteIds("avatars", avatarIds.filter((id) => !avatarsToKeep.includes(id)));
 

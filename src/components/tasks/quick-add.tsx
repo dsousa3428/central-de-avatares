@@ -7,7 +7,8 @@ import { cn } from "@/lib/format";
 import { nextRestDay } from "@/lib/smart-tasks";
 import { useStore } from "@/lib/store";
 import { createTask } from "@/lib/task-actions";
-import { describeDue, parseQuickAdd, priorityLabel, recurrenceLabel, type QuickKind } from "@/lib/tasks";
+import { errorMessage } from "@/lib/errors";
+import { alignStart, describeDue, parseQuickAdd, priorityLabel, recurrenceLabel, type QuickKind } from "@/lib/tasks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/field";
 import { useToast } from "@/components/ui/toast";
@@ -49,7 +50,10 @@ export function QuickAdd({
   const parsed = useMemo(() => parseQuickAdd(text, today, db.avatars, ignore), [text, today, db.avatars, ignore]);
   const knownDefault = defaultAvatar && db.avatars.some((avatar) => avatar.id === defaultAvatar) ? defaultAvatar : null;
   const avatarId = parsed.avatar_id ?? knownDefault;
-  const due = parsed.due_date ?? picked ?? defaultDate ?? null;
+  // a data: a da frase; senão a sugestão aceita; senão a da lista (hoje); senão a que a frase dá a entender
+  // (horário ou repetição sem data: hoje). Dias úteis nunca começam no fim de semana.
+  const chosenDate = parsed.due_date ?? picked ?? defaultDate ?? parsed.implied_date;
+  const due = chosenDate && parsed.recurrence ? alignStart(chosenDate, parsed.recurrence) : chosenDate;
   const rest = !parsed.due_date && !picked && avatarId ? nextRestDay(db, avatarId, today) : null;
   const avatarName = (id: string) => {
     const avatar = db.avatars.find((item) => item.id === id);
@@ -93,12 +97,15 @@ export function QuickAdd({
       });
       toast.success(due ? `Tarefa adicionada: ${describeDue(due, parsed.due_time, today)}` : "Tarefa adicionada");
     } catch (err) {
-      toast.error(err);
       if (current.current === "") {
+        toast.error(err);
         current.current = sent.text;
         setText(sent.text);
         setIgnore(sent.ignore);
         setPicked(sent.picked);
+      } else {
+        // o campo já tem outra frase: avisa qual não foi guardada, para não se perder sem ninguém ver
+        toast.error(`${errorMessage(err)} Não foi guardada: “${sent.text.trim()}”.`);
       }
     }
   }
@@ -125,6 +132,10 @@ export function QuickAdd({
   }
   // o que vem de fora da frase (o filtro da tela, a lista de hoje, a sugestão aceita) também aparece
   if (!parsed.due_date && due) chips.push({ key: "data-padrao", icon: <CalendarDays className="size-3.5" />, label: describeDue(due, null, today) });
+  // a primeira vez de uma repetição com dia certo ("toda segunda", "todo dia 5"): a data aparece também
+  if (parsed.due_date && due && !parsed.found.some((piece) => piece.kind === "data")) {
+    chips.push({ key: "data-repeticao", icon: <CalendarDays className="size-3.5" />, label: `a partir de ${describeDue(due, null, today).toLowerCase()}` });
+  }
   if (!parsed.avatar_id && avatarId) chips.push({ key: "avatar-padrao", icon: <UserRound className="size-3.5" />, label: avatarName(avatarId) });
 
   return (

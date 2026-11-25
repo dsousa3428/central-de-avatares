@@ -246,6 +246,12 @@ async function scanWidth(WIDTH) {
     await dialog().getByRole('heading', { name: 'Nova tarefa' }).waitFor();
     await dialog().getByLabel('Avatar').selectOption({ label: "🇮🇹 Fra' Salvio" });
     await scan('nova tarefa (com Descanso da conta)'); await close();
+    await p.getByRole('button', { name: 'Mudar a data: Gravar 3 vídeos da horta' }).click();
+    await dialog().getByRole('heading', { name: 'Mudar a data' }).waitFor();
+    await scan('mudar a data');
+    await p.screenshot({ path: OUT + `${WIDTH}-mudar-data.png` });
+    await p.keyboard.press('Escape');
+    await p.waitForFunction(() => !document.querySelector('dialog[open]'));
     await p.getByRole('button', { name: 'Editar: Gravar 3 vídeos da horta' }).click();
     await dialog().getByRole('heading', { name: 'Editar tarefa' }).waitFor();
     await scan('editar tarefa (com Apagar)');

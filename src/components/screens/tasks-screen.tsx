@@ -34,29 +34,40 @@ export function TasksScreen() {
   const [editing, setEditing] = useState<Task | "new" | null>(null);
   const [moving, setMoving] = useState(false);
 
-  // A página de um avatar abre esta tela com ?avatar=<id>: vira o filtro (e a lista "Todas") uma vez só.
-  const asked = useSearchParams().get("avatar");
+  // Pedidos de chegada, adotados uma vez só e tirados do endereço: a página de um avatar abre com
+  // ?avatar=<id> (o filtro dele, na lista "Todas"); o atalho da tela Hoje, com ?ver=hoje (a lista de
+  // hoje, com todos os avatares — a tela fica montada e lembraria o último filtro).
+  const params = useSearchParams();
+  const askedAvatar = params.get("avatar");
+  const askedView = params.get("ver");
+  const arrival = askedAvatar || askedView ? `${askedAvatar ?? ""}|${askedView ?? ""}` : null;
   const [adopted, setAdopted] = useState<string | null>(null);
-  if (asked !== adopted) {
-    setAdopted(asked);
-    if (asked) {
-      setAvatarFilter(asked);
+  if (arrival !== adopted) {
+    setAdopted(arrival);
+    if (askedAvatar) {
+      setAvatarFilter(askedAvatar);
       setView("todas");
+    } else if (askedView === "hoje") {
+      setAvatarFilter("todos");
+      setView("hoje");
     }
   }
   useEffect(() => {
-    if (asked !== null) window.history.replaceState(null, "", "/tarefas");
-  }, [asked]);
+    if (arrival !== null) window.history.replaceState(null, "", "/tarefas");
+  }, [arrival]);
 
   const filter = avatarFilter === "todos" || avatarFilter === "geral" || db.avatars.some((avatar) => avatar.id === avatarFilter) ? avatarFilter : "todos";
   const chosenAvatar = filter !== "todos" && filter !== "geral" ? filter : null;
   const matches = (avatarId: string | null) => filter === "todos" || (filter === "geral" ? !avatarId : avatarId === filter);
+  // (uma sugestão pode ser de vários avatares: as vendas da semana passada)
+  const matchesAuto = (task: AutoTask) =>
+    filter === "todos" || (filter === "geral" ? task.avatarIds.length === 0 : task.avatarIds.includes(filter));
 
   const labelOf = useAvatarLabels();
 
   const auto = useMemo(() => buildAutoTasks(db, today), [db, today]);
   const mine = useMemo(() => db.tasks.filter((task) => matches(task.avatar_id)), [db.tasks, filter]); // eslint-disable-line react-hooks/exhaustive-deps
-  const suggested = useMemo(() => auto.filter((task) => matches(task.avatarId)), [auto, filter]); // eslint-disable-line react-hooks/exhaustive-deps
+  const suggested = useMemo(() => auto.filter(matchesAuto), [auto, filter]); // eslint-disable-line react-hooks/exhaustive-deps
   const buckets = useMemo(() => bucketTasks(mine, today), [mine, today]);
   const resting = useMemo(() => restingWithStructure(db, suggested), [db, suggested]);
   // (com um avatar escolhido no filtro, não precisa repetir o nome dele em cada linha)
@@ -128,6 +139,10 @@ export function TasksScreen() {
               </option>
             ))}
           </Select>
+          <p className="px-1 text-xs leading-relaxed text-muted">
+            Toque numa tarefa para editar tudo; no calendário{" "}
+            <CalendarClock className="inline size-3.5 align-[-2px]" aria-hidden />, para mudar só a data.
+          </p>
         </div>
 
         {view === "hoje" ? (
@@ -176,9 +191,15 @@ export function TasksScreen() {
 
         {view === "todas" ? (
           <Everything
-            tasks={mine.filter(isOpen)}
-            auto={suggested}
-            groups={filter === "todos" ? [null, ...db.avatars.map((avatar) => avatar.id)] : [chosenAvatar]}
+            groups={
+              filter === "todos"
+                ? [null, ...db.avatars.map((avatar) => avatar.id)].map((id) => ({
+                    id,
+                    tasks: mine.filter((task) => isOpen(task) && task.avatar_id === id),
+                    auto: suggested.filter((task) => task.avatarId === id),
+                  }))
+                : [{ id: chosenAvatar, tasks: mine.filter(isOpen), auto: suggested }]
+            }
             title={(id) => (id ? labelOf(id) : "Gerais")}
             rows={rows}
             autoRows={autoRows}
@@ -212,7 +233,7 @@ export function TasksScreen() {
 
 function AutoSection({ tasks, empty, render }: { tasks: AutoTask[]; empty: string; render: (tasks: AutoTask[]) => React.ReactNode }) {
   return (
-    <Section title="Do painel" subtitle="Tiradas do que está registrado nos avatares. Concluir aqui marca lá.">
+    <Section title="Do painel" subtitle="Tiradas do que está registrado nos avatares (as datas seguem o aquecimento). Concluir aqui marca lá.">
       {tasks.length > 0 ? <ul className="divide-y divide-line">{render(tasks)}</ul> : <p className="py-1 text-sm text-muted">{empty}</p>}
     </Section>
   );
@@ -266,26 +287,18 @@ function Upcoming({
 
 /** Tudo o que está por fazer, por avatar (as gerais primeiro). */
 function Everything({
-  tasks,
-  auto,
   groups,
   title,
   rows,
   autoRows,
 }: {
-  tasks: Task[];
-  auto: AutoTask[];
-  groups: Array<string | null>;
+  groups: Array<{ id: string | null; tasks: Task[]; auto: AutoTask[] }>;
   title: (id: string | null) => string;
   rows: (tasks: Task[]) => React.ReactNode;
   autoRows: (tasks: AutoTask[]) => React.ReactNode;
 }) {
   const filled = groups
-    .map((id) => ({
-      id,
-      tasks: tasks.filter((task) => task.avatar_id === id).sort(compareTasks),
-      auto: auto.filter((task) => task.avatarId === id),
-    }))
+    .map((group) => ({ ...group, tasks: [...group.tasks].sort(compareTasks) }))
     .filter((group) => group.tasks.length > 0 || group.auto.length > 0);
   if (filled.length === 0) {
     return (

@@ -594,12 +594,22 @@ function removeLocal(table: TableName, id: string) {
   setState(next);
 }
 
-export function deleteRow(table: TableName, id: string): Promise<void> {
-  return tracked(async () => {
+/**
+ * Tabelas cujas linhas são citadas por outras com `on delete set null`: ao apagar
+ * uma delas, o banco muda também as linhas que a citavam (e a versão — `updated_at`
+ * — delas). Sem reler, a próxima gravação de uma dessas linhas seria recusada como
+ * "alterada em outro aparelho" (ex.: concluir uma tarefa do avatar que acabou de ser apagado).
+ */
+const SET_NULL_PARENTS: ReadonlySet<TableName> = new Set<TableName>(["avatars", "phones", "antidetect_profiles", "accounts"]);
+
+export async function deleteRow(table: TableName, id: string): Promise<void> {
+  await tracked(async () => {
     const { error } = await getSupabase().from(table).delete().eq("id", id);
     if (error) throw error;
     removeLocal(table, id);
   });
+  // (depois da exclusão, e não dentro dela: a releitura é descartada enquanto há gravação a caminho)
+  if (SET_NULL_PARENTS.has(table)) await refresh();
 }
 
 /**

@@ -2,11 +2,20 @@
 
 import { useState } from "react";
 import { Trash2 } from "lucide-react";
-import { addDays, formatWeekdayDate, isValidISODate, parseISODate, todayISO } from "@/lib/dates";
+import { formatWeekdayDate, isValidISODate, todayISO } from "@/lib/dates";
 import { nextRestDay } from "@/lib/smart-tasks";
 import { useStore } from "@/lib/store";
 import { createTask, deleteTask, updateTask } from "@/lib/task-actions";
-import { PRIORITIES, readPriority, readRecurrence, RECURRENCES } from "@/lib/tasks";
+import {
+  alignStart,
+  encodeRecurrence,
+  PRIORITIES,
+  quickDates,
+  readPriority,
+  readRecurrence,
+  recurrenceLabel,
+  RECURRENCES,
+} from "@/lib/tasks";
 import type { Task, TaskPriority, TaskRecurrence } from "@/lib/types";
 import { invalid } from "@/components/common/validation";
 import { Button } from "@/components/ui/button";
@@ -44,15 +53,19 @@ export function TaskForm({
   const set = <K extends keyof typeof values>(key: K, value: (typeof values)[K]) => setValues((now) => ({ ...now, [key]: value }));
   const avatarId = db.avatars.some((avatar) => avatar.id === values.avatar) ? values.avatar : "";
   const rest = avatarId ? nextRestDay(db, avatarId, today) : null;
-  const nextMonday = addDays(today, ((8 - parseISODate(today).getDay()) % 7) || 7);
+  // a data que vai ser gravada: repetir, ou ter horário, sem data, começa hoje (dias úteis: no próximo dia útil)
+  const start = values.due_date || (values.recurrence || values.due_time ? today : "");
+  const due = start && values.recurrence && isValidISODate(start) ? alignStart(start, values.recurrence) : start;
+  // como a repetição vai ficar, do jeito que será gravada ("Toda quarta", "Todo dia 31")
+  const pattern = values.recurrence
+    ? recurrenceLabel(encodeRecurrence(values.recurrence, due || null, task?.recurrence, task ? task.due_date : undefined), due || null)
+    : "";
 
   async function submit() {
     const title = values.title.trim();
     if (!title) invalid("Escreva o que fazer.");
     if (values.due_date && !isValidISODate(values.due_date)) invalid("A data não existe. Confira o dia e o mês.");
     if (values.due_time && !/^([01]\d|2[0-3]):[0-5]\d$/.test(values.due_time)) invalid("Horário inválido. Use o formato 14:30.");
-    // repetir, ou ter horário, sem data: começa hoje
-    const due = values.due_date || (values.recurrence || values.due_time ? today : "");
     const data = {
       title,
       notes: values.notes.trim() || null,
@@ -84,11 +97,17 @@ export function TaskForm({
     }
   }
 
+  // o próximo descanso da conta: se cai num dos atalhos, o atalho diz isso; senão, vira um atalho a mais
+  const shortcuts = quickDates(today).map((option) => ({
+    label: rest && option.date === rest.date ? `${option.label} (descanso da conta)` : option.label,
+    date: option.date,
+  }));
   const quick: Array<{ label: string; date: string }> = [
-    { label: "Hoje", date: today },
-    { label: "Amanhã", date: addDays(today, 1) },
-    ...(rest ? [{ label: `Descanso da conta (${formatWeekdayDate(rest.date)})`, date: rest.date }] : []),
-    { label: "Próxima semana", date: nextMonday },
+    ...shortcuts.slice(0, 2),
+    ...(rest && !shortcuts.some((option) => option.date === rest.date)
+      ? [{ label: `Descanso da conta (${formatWeekdayDate(rest.date)})`, date: rest.date }]
+      : []),
+    ...shortcuts.slice(2),
   ];
 
   return (
@@ -173,7 +192,8 @@ export function TaskForm({
       </div>
       {values.recurrence ? (
         <p className="text-xs leading-relaxed text-muted">
-          Tarefa que se repete não some ao concluir: a data anda para a próxima vez.
+          <strong className="font-semibold text-fg">{pattern}</strong> — tarefa que se repete não some ao concluir: a data
+          anda para a próxima vez.
         </p>
       ) : null}
     </FormModal>

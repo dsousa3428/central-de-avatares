@@ -25,7 +25,7 @@ export function AvatarTasks({ avatar }: { avatar: Avatar }) {
     [db.tasks, avatar.id],
   );
   const suggested = useMemo(
-    () => buildAutoTasks(db, today).filter((task) => task.avatarId === avatar.id).length,
+    () => buildAutoTasks(db, today).filter((task) => task.avatarIds.includes(avatar.id)).length,
     [db, today, avatar.id],
   );
   const href = `/tarefas?avatar=${avatar.id}`;

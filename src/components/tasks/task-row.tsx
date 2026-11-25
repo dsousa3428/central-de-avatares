@@ -2,17 +2,21 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { CalendarDays, Check, Clock, ExternalLink, Repeat, Sparkles } from "lucide-react";
+import { CalendarClock, CalendarDays, Check, Clock, ExternalLink, Repeat, Sparkles } from "lucide-react";
 import { cn } from "@/lib/format";
 import type { AutoTask } from "@/lib/smart-tasks";
 import { completeAutoTask, completeTask, reopenTask } from "@/lib/task-actions";
 import { completedDay, describeDue, dueTone, readRecurrence, recurrenceLabel } from "@/lib/tasks";
 import type { Task } from "@/lib/types";
-import { buttonClass } from "@/components/ui/button";
+import { Button, buttonClass } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
+import { TaskDateMenu } from "./date-menu";
 import { dueText, priorityRing } from "./task-visuals";
 
-/** Uma tarefa escrita pelo dono: o círculo conclui (ou, nas feitas, desfaz); o resto abre para editar. */
+/**
+ * Uma tarefa escrita pelo dono: o círculo conclui (ou, nas feitas, desfaz), o texto
+ * abre para editar tudo e o calendário muda só a data.
+ */
 export function TaskRow({
   task,
   today,
@@ -28,6 +32,7 @@ export function TaskRow({
   const toast = useToast();
   // (toque duplo no círculo: o segundo é ignorado enquanto o primeiro grava)
   const [saving, setSaving] = useState(false);
+  const [dating, setDating] = useState(false);
   const done = Boolean(task.completed_at);
   const doneOn = completedDay(task);
   const recurrence = readRecurrence(task.recurrence);
@@ -86,6 +91,29 @@ export function TaskRow({
           extra={done && doneOn ? `feita ${describeDue(doneOn, null, today).toLowerCase()}` : ""}
         />
       </button>
+      {!done ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          iconOnly
+          aria-label={`Mudar a data: ${task.title}`}
+          title="Mudar a data"
+          onClick={() => setDating(true)}
+          className="-mr-2 shrink-0 text-muted"
+        >
+          <CalendarClock className="size-4" />
+        </Button>
+      ) : null}
+      {dating ? (
+        <TaskDateMenu
+          task={task}
+          onClose={() => setDating(false)}
+          onEditAll={() => {
+            setDating(false);
+            onEdit();
+          }}
+        />
+      ) : null}
     </li>
   );
 }

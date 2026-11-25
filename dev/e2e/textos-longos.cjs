@@ -161,6 +161,16 @@ const S = SHOTS + '/';
     await check(label);
   }
   await page.getByRole('radiogroup', { name: 'Mostrar' }).getByRole('radio', { name: 'Hoje', exact: true }).click();
+  await page.getByRole('button', { name: /^Mudar a data: Tarefa / }).click();
+  await page.locator('dialog[open]').getByRole('heading', { name: 'Mudar a data' }).waitFor();
+  await page.waitForTimeout(500);
+  {
+    const extra = await page.evaluate(() => { const p = document.querySelector('dialog[open] .cda-dialog-panel'); const b = p.querySelector('.overflow-y-auto'); return Math.max(b.scrollWidth - b.clientWidth, p.scrollWidth - p.clientWidth); });
+    results.push(`${extra > 0 ? '✗' : '✓'} mudar-a-data${extra > 0 ? ` (sobra ${extra}px)` : ''}`);
+    await page.screenshot({ path: `${S}90-stress-mudar-a-data.png` });
+  }
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector('dialog[open]'));
   await page.getByRole('button', { name: /^Editar: Tarefa / }).click();
   await page.locator('dialog[open]').getByRole('heading', { name: 'Editar tarefa' }).waitFor();
   await page.waitForTimeout(500);

@@ -56,7 +56,7 @@ export function TodayTasks() {
       title="Minhas tarefas"
       subtitle={summary || "Nada seu marcado para hoje."}
       actions={
-        <Link href="/tarefas" className={buttonClass("secondary", "sm")}>
+        <Link href="/tarefas?ver=hoje" className={buttonClass("secondary", "sm")}>
           Ver todas
         </Link>
       }
@@ -64,7 +64,7 @@ export function TodayTasks() {
       {list.length > 0 ? <TaskList tasks={list} today={today} avatarLabel={labelOf} /> : null}
       <QuickAdd defaultDate={today} className={list.length > 0 ? "mt-2" : undefined} />
       {suggested > 0 ? (
-        <Link href="/tarefas" className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline">
+        <Link href="/tarefas?ver=hoje" className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-primary hover:underline">
           <Sparkles className="size-4 shrink-0" aria-hidden />
           {suggested === 1 ? "Ver a sugestão do painel" : `Ver as ${suggested} sugestões do painel`}
         </Link>

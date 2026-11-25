@@ -21,7 +21,7 @@ import { accountsOf, currentAccount, isWarmupRunning, phoneLabel, profileShortLa
 import type { Db } from "./store";
 import { readStructure, type StructureKey } from "./structure";
 import type { Account, Avatar, TaskPriority, Warmup } from "./types";
-import { avatarsMissingSales } from "./warnings";
+import { avatarsMissingSales, ignoredIds } from "./warnings";
 import { warmupInfo, type WarmupInfo } from "./warmup";
 
 export type AutoKind = "estrutura" | "aquecimento" | "reposicao" | "vendas" | "funil" | "video";
@@ -39,8 +39,10 @@ export interface AutoTask {
   key: string;
   kind: AutoKind;
   title: string;
-  /** null = de vários avatares (ex.: as vendas da semana). */
+  /** O avatar dela; null = de vários avatares (ex.: as vendas da semana). */
   avatarId: string | null;
+  /** Todos os avatares a que ela diz respeito (para os filtros e a contagem da página do avatar). */
+  avatarIds: string[];
   /** AAAA-MM-DD ou null (sem prazo). */
   due: string | null;
   priority: TaskPriority;
@@ -78,38 +80,37 @@ function structureContext(
   db: Db,
   avatar: Avatar,
   today: string,
-): { due: string | null; priority: TaskPriority; reason: string; restToday: boolean } | null {
+): { due: string | null; priority: TaskPriority; reason: string; restToday: boolean; warned: boolean } | null {
   const account = currentAccount(accountsOf(db, avatar.id));
   if (!account) return null;
   const marked = readStructure(avatar.kit).some((step) => step.done);
   if (account.status === "ativa") {
     // (avatar sem nenhum passo marcado não é cobrado: já vendia antes de a estrutura existir no painel)
-    return marked ? { due: today, priority: 1, reason: `@${account.handle} já está no ar.`, restToday: false } : null;
+    return marked ? { due: today, priority: 1, reason: `@${account.handle} já está no ar.`, restToday: false, warned: true } : null;
   }
   if (account.status !== "aquecendo") return null;
   const running = runningInfo(db, account, today);
-  if (!running) return { due: null, priority: 3, reason: `@${account.handle} está aquecendo (sem calendário).`, restToday: false };
+  if (!running) return { due: null, priority: 3, reason: `@${account.handle} está aquecendo (sem calendário).`, restToday: false, warned: false };
   const { info } = running;
   if (info.phase === "concluido") {
-    return { due: today, priority: 1, reason: `O aquecimento de @${account.handle} terminou: a conta está pronta.`, restToday: false };
+    return { due: today, priority: 1, reason: `O aquecimento de @${account.handle} terminou: a conta está pronta.`, restToday: false, warned: true };
   }
   const restToday = Boolean(info.today && !info.today.use);
   const left = info.daysLeft;
-  const when = left <= 0 ? "hoje" : left === 1 ? "amanhã" : `em ${left} dias (${formatWeekdayDate(info.endDate)})`;
-  return {
-    due: info.endDate,
-    priority: left <= 3 ? 2 : 3,
-    reason: restToday
-      ? `@${account.handle} descansa hoje: bom dia para adiantar. A conta fica pronta ${when}.`
-      : `@${account.handle} fica pronta ${when}.`,
-    restToday,
-  };
+  const when = left === 0 ? "hoje" : left === 1 ? "amanhã" : `em ${left} dias (${formatWeekdayDate(info.endDate)})`;
+  let reason: string;
+  // (o calendário pode ter passado da data de fim com dias de uso por marcar)
+  if (left < 0) reason = `O aquecimento de @${account.handle} passou da data de fim (${formatWeekdayDate(info.endDate)}) com dias por marcar.`;
+  else if (restToday) reason = `@${account.handle} descansa hoje: bom dia para adiantar. A conta fica pronta ${when}.`;
+  else reason = `@${account.handle} fica pronta ${when}.`;
+  return { due: info.endDate, priority: left <= 3 ? 2 : 3, reason, restToday, warned: false };
 }
 
 /** Todas as tarefas que o painel sugere hoje, das mais urgentes para as menos. */
 export function buildAutoTasks(db: Db, today: string): AutoTask[] {
   const list: AutoTask[] = [];
   const active = db.avatars.filter((avatar) => avatar.status === "ativo");
+  const dismissed = new Set(ignoredIds(db.settings?.prefs));
 
   // --- estrutura: site, entregável, checkout e automação
   for (const avatar of active) {
@@ -117,12 +118,16 @@ export function buildAutoTasks(db: Db, today: string): AutoTask[] {
     if (pending.length === 0) continue;
     const context = structureContext(db, avatar, today);
     if (!context) continue;
+    // quando já há o aviso "falta terminar a estrutura" e o dono o dispensou, o painel também para de sugerir
+    // (o mesmo id do aviso: marcar mais um passo traz os dois de volta)
+    if (context.warned && dismissed.has(`estrutura:${avatar.id}:${pending.map((step) => step.key).join("+")}`)) continue;
     for (const step of pending) {
       list.push({
         key: `estrutura:${avatar.id}:${step.key}`,
         kind: "estrutura",
         title: STRUCTURE_TITLES[step.key],
         avatarId: avatar.id,
+        avatarIds: [avatar.id],
         due: context.due,
         priority: context.priority,
         reason: context.reason,
@@ -147,6 +152,7 @@ export function buildAutoTasks(db: Db, today: string): AutoTask[] {
         kind: "aquecimento",
         title: `Resolver o aquecimento atrasado de @${account.handle}`,
         avatarId: avatar.id,
+        avatarIds: [avatar.id],
         due: first.date,
         priority: 1,
         reason:
@@ -168,13 +174,14 @@ export function buildAutoTasks(db: Db, today: string): AutoTask[] {
         kind: "aquecimento",
         title: `Usar @${account.handle} por ${day.minutes} min`,
         avatarId: avatar.id,
+        avatarIds: [avatar.id],
         due: today,
         priority: 2,
         reason: [
           `Aquecimento, dia ${day.n} de ${info.totalDays}`,
           phone ? phoneLabel(phone) : "",
           profile ? profileShortLabel(profile) : "",
-          day.task.trim(),
+          String(day.task ?? "").trim(),
         ]
           .filter(Boolean)
           .join(" · "),
@@ -200,6 +207,7 @@ export function buildAutoTasks(db: Db, today: string): AutoTask[] {
         // (os passos do checklist são curtos — "Bio", "Destaques" —: o título diz de onde vêm)
         title: `Reposição: ${item.label}`,
         avatarId: avatar.id,
+        avatarIds: [avatar.id],
         due: null,
         priority: 2,
         reason: `Conta nova de @${account.handle}: faltam ${progress.pending.length} de ${progress.total} passos da reposição.`,
@@ -220,6 +228,7 @@ export function buildAutoTasks(db: Db, today: string): AutoTask[] {
       kind: "vendas",
       title: "Lançar as vendas da semana passada",
       avatarId: missing.length === 1 ? missing[0].id : null,
+      avatarIds: missing.map((avatar) => avatar.id),
       due: today,
       priority: 2,
       reason: `Semana de ${weekLabel(lastWeek, today)}: ${missing.map((avatar) => avatar.name).join(", ")}.`,
@@ -241,6 +250,7 @@ export function buildAutoTasks(db: Db, today: string): AutoTask[] {
         kind: "funil",
         title: `Modelar: ${stepLabel(step)}`,
         avatarId: avatar.id,
+        avatarIds: [avatar.id],
         due: null,
         priority: 4,
         reason: `Funil de ${model.name || "modelo sem nome"} · passo ${index + 1} de ${model.steps.length}.`,
@@ -261,6 +271,7 @@ export function buildAutoTasks(db: Db, today: string): AutoTask[] {
         kind: "video",
         title: `Modelar o vídeo: ${video.label}`,
         avatarId: avatar.id,
+        avatarIds: [avatar.id],
         due: null,
         priority: 4,
         reason: video.note?.trim() || "Vídeo para modelar.",

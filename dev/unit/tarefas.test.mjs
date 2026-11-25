@@ -7,6 +7,7 @@ import { buildSheets } from "../../src/lib/backup-sheets.ts";
 import { stepLabel } from "../../src/lib/funnels.ts";
 import { buildAutoTasks, nextRestDay, restingWithStructure } from "../../src/lib/smart-tasks.ts";
 import {
+  alignStart,
   bucketTasks,
   compareTasks,
   completedDay,
@@ -14,13 +15,16 @@ import {
   describeDue,
   dueTone,
   encodeRecurrence,
+  keepPattern,
   monthlyAnchor,
   nextDue,
   parseQuickAdd,
   priorityLabel,
+  quickDates,
   readPriority,
   readRecurrence,
   recurrenceLabel,
+  weeklyAnchor,
 } from "../../src/lib/tasks.ts";
 import { buildDays, DEFAULT_WARMUP_PLAN } from "../../src/lib/warmup.ts";
 
@@ -39,7 +43,9 @@ test("prioridade e repetição: o que não é conhecido vira o padrão", () => {
   assert.equal(priorityLabel("lixo"), "Normal");
   assert.equal(readRecurrence("semanal"), "semanal");
   assert.equal(readRecurrence("mensal:31"), "mensal");
-  for (const bad of ["Semanal", "mensal:15", "mensal:", "anual", null, 3]) assert.equal(readRecurrence(bad), null);
+  assert.equal(readRecurrence("mensal:15"), "mensal");
+  assert.equal(readRecurrence("semanal:1"), "semanal");
+  for (const bad of ["Semanal", "mensal:0", "mensal:32", "mensal:", "semanal:7", "anual", null, 3]) assert.equal(readRecurrence(bad), null);
   assert.equal(recurrenceLabel("diaria", null), "Todo dia");
   assert.equal(recurrenceLabel("dias_uteis", TODAY), "Dias úteis");
   assert.equal(recurrenceLabel("semanal", "2026-11-30"), "Toda segunda");
@@ -47,6 +53,10 @@ test("prioridade e repetição: o que não é conhecido vira o padrão", () => {
   assert.equal(recurrenceLabel("semanal", null), "Toda semana");
   assert.equal(recurrenceLabel("mensal", "2026-12-15"), "Todo dia 15");
   assert.equal(recurrenceLabel("mensal:31", "2027-02-28"), "Todo dia 31"); // em fevereiro cai no dia 28, mas é "todo dia 31"
+  // com o dia guardado, o padrão não sai da data (esta vez foi passada para outro dia)
+  assert.equal(recurrenceLabel("semanal:1", TODAY), "Toda segunda");
+  assert.equal(recurrenceLabel("semanal:0", TODAY), "Todo domingo");
+  assert.equal(recurrenceLabel("mensal:15", TODAY), "Todo dia 15");
   assert.equal(recurrenceLabel(null, TODAY), "");
 });
 
@@ -62,8 +72,35 @@ test("repetição: a próxima data é sempre depois de hoje", () => {
   assert.equal(nextDue("2027-01-31", "mensal", "2027-01-31"), "2027-02-28"); // fevereiro não tem dia 31
   // sem o dia guardado, o dia 31 viraria 28 para sempre; com ele, volta ao 31
   assert.equal(nextDue("2027-02-28", "mensal", "2027-02-28"), "2027-03-28");
-  assert.equal(nextDue("2027-02-28", "mensal", "2027-02-28", 31), "2027-03-31");
-  assert.equal(nextDue("2027-03-31", "mensal", "2027-03-31", 31), "2027-04-30");
+  assert.equal(nextDue("2027-02-28", "mensal:31", "2027-02-28"), "2027-03-31");
+  assert.equal(nextDue("2027-03-31", "mensal:31", "2027-03-31"), "2027-04-30");
+  // esta vez foi passada para outro dia: a próxima volta ao padrão
+  assert.equal(nextDue(TODAY, "semanal:1", TODAY), "2026-11-30"); // terça (esta vez) → a segunda seguinte
+  assert.equal(nextDue("2026-11-20", "mensal:15", "2026-11-20"), "2026-12-15");
+  assert.equal(nextDue("2026-11-28", "dias_uteis", "2026-11-28"), "2026-11-30"); // feita num sábado → segunda
+});
+
+test("mudar só desta vez: a repetição continua no mesmo dia", () => {
+  // "toda segunda" atrasada, passada para hoje (terça): continua toda segunda
+  assert.equal(keepPattern("semanal", "2026-11-23", TODAY), "semanal:1");
+  assert.equal(keepPattern("semanal:1", TODAY, "2026-11-30"), "semanal"); // de volta a uma segunda: sem nada guardado
+  assert.equal(keepPattern("semanal", "2026-11-23", "2026-11-30"), "semanal");
+  // "todo dia 15" passado para o dia 20 continua dia 15; "todo dia 31" num mês de 30 dias está no padrão
+  assert.equal(keepPattern("mensal", "2026-11-15", "2026-11-20"), "mensal:15");
+  assert.equal(keepPattern("mensal:15", "2026-11-20", "2026-12-15"), "mensal");
+  assert.equal(keepPattern("mensal:31", "2026-10-31", "2026-11-30"), "mensal:31");
+  assert.equal(keepPattern("mensal:31", "2026-10-31", "2026-11-20"), "mensal:31");
+  assert.equal(keepPattern("diaria", "2026-11-20", TODAY), "diaria");
+  assert.equal(keepPattern(null, "2026-11-20", TODAY), null);
+  assert.equal(weeklyAnchor("semanal:6"), 6);
+  assert.equal(weeklyAnchor("semanal"), null);
+  // e a próxima vez, depois de feita hoje, volta para o dia do padrão (o "todo dia 31" não pula novembro)
+  assert.equal(nextDue(TODAY, keepPattern("semanal", "2026-11-23", TODAY), TODAY), "2026-11-30");
+  assert.equal(nextDue("2026-11-20", keepPattern("mensal:31", "2026-10-31", "2026-11-20"), "2026-11-20"), "2026-11-30");
+  // dias úteis não começam no fim de semana
+  assert.equal(alignStart("2026-11-28", "dias_uteis"), "2026-11-30");
+  assert.equal(alignStart("2026-11-28", "diaria"), "2026-11-28");
+  assert.equal(alignStart(TODAY, "dias_uteis"), TODAY);
 });
 
 test("repetição todo mês: os dias 29 a 31 ficam guardados", () => {
@@ -78,7 +115,15 @@ test("repetição todo mês: os dias 29 a 31 ficam guardados", () => {
   assert.equal(encodeRecurrence("mensal", "2027-02-27", "mensal:31"), "mensal");
   assert.equal(encodeRecurrence("mensal", "2027-03-30", "mensal:31"), "mensal:30");
   assert.equal(monthlyAnchor("mensal:30"), 30);
-  for (const bad of ["mensal:28", "mensal", "mensal:32", null]) assert.equal(monthlyAnchor(bad), null);
+  assert.equal(monthlyAnchor("mensal:15"), 15);
+  for (const bad of ["mensal:0", "mensal", "mensal:32", null]) assert.equal(monthlyAnchor(bad), null);
+  // na janela de editar: sem mudar a data nem a repetição, fica como estava (até o dia guardado)
+  assert.equal(encodeRecurrence("semanal", TODAY, "semanal:1", TODAY), "semanal:1");
+  assert.equal(encodeRecurrence("mensal", "2026-11-20", "mensal:15", "2026-11-20"), "mensal:15");
+  // mudou a data: a repetição passa a seguir a data nova
+  assert.equal(encodeRecurrence("semanal", "2026-11-25", "semanal:1", TODAY), "semanal");
+  // mudou a repetição: também
+  assert.equal(encodeRecurrence("mensal", TODAY, "semanal:1", TODAY), "mensal");
 });
 
 test("datas na tela", () => {
@@ -96,6 +141,20 @@ test("datas na tela", () => {
   assert.equal(dayHeading("2026-11-25", TODAY), "Amanhã · qua, 25/11");
   assert.equal(dayHeading("2026-11-26", TODAY), "qui, 26/11");
   assert.match(dayHeading("2027-01-04", TODAY), /04\/01\/2027$/);
+});
+
+test("atalhos de data: hoje, amanhã, fim de semana e próxima semana — sem repetir o mesmo dia", () => {
+  const show = (today) => quickDates(today).map((option) => `${option.key}:${option.date}`);
+  assert.deepEqual(show(TODAY), ["hoje:2026-11-24", "amanha:2026-11-25", "fim_de_semana:2026-11-28", "proxima_semana:2026-11-30"]);
+  assert.deepEqual(quickDates(TODAY).map((option) => option.label), ["Hoje", "Amanhã", "Fim de semana", "Próxima semana"]);
+  // sexta: o fim de semana é amanhã
+  assert.deepEqual(show("2026-11-27"), ["hoje:2026-11-27", "amanha:2026-11-28", "proxima_semana:2026-11-30"]);
+  // sábado: o fim de semana é hoje (como na frase "fim de semana")
+  assert.deepEqual(show("2026-11-28"), ["hoje:2026-11-28", "amanha:2026-11-29", "proxima_semana:2026-11-30"]);
+  // domingo: a próxima semana é amanhã
+  assert.deepEqual(show("2026-11-29"), ["hoje:2026-11-29", "amanha:2026-11-30"]);
+  // a mesma regra da frase
+  assert.equal(parseQuickAdd("Editar no fim de semana", "2026-11-28", []).due_date, "2026-11-28");
 });
 
 test("listas: atrasadas, hoje (com horário primeiro), próximos dias, sem data e feitas", () => {
@@ -149,9 +208,10 @@ const AVATARS = [
   { id: "a3", name: "Nonno Beppe" },
 ];
 const quick = (text, ignore) => parseQuickAdd(text, TODAY, AVATARS, ignore);
+/** [título, data (a escrita ou, sem ela, a dada a entender), horário, prioridade, avatar, repetição] */
 const brief = (text, ignore) => {
   const result = quick(text, ignore);
-  return [result.title, result.due_date, result.due_time, result.priority, result.avatar_id, result.recurrence];
+  return [result.title, result.due_date ?? result.implied_date, result.due_time, result.priority, result.avatar_id, result.recurrence];
 };
 
 test("adicionar rápido: data, horário, prioridade e avatar na mesma frase", () => {
@@ -199,6 +259,15 @@ test("adicionar rápido: datas", () => {
   assert.equal(title("Gravar vídeo de amanhã"), "Gravar vídeo");
 });
 
+test("adicionar rápido: horário e repetição sem data dão a entender hoje — sem tomar o lugar de outra data", () => {
+  const timeOnly = quick("Gravar às 9h30");
+  assert.deepEqual([timeOnly.due_date, timeOnly.implied_date], [null, TODAY]); // quem chama decide (a sugestão de data vale mais)
+  const explicit = quick("Gravar amanhã 9h");
+  assert.deepEqual([explicit.due_date, explicit.implied_date], ["2026-11-25", null]);
+  // dias úteis num sábado começam na segunda
+  assert.equal(parseQuickAdd("Conferir proxies dias úteis", "2026-11-28", []).implied_date, "2026-11-30");
+});
+
 test("adicionar rápido: horário (sem data, é hoje)", () => {
   assert.deepEqual(brief("Gravar às 9h30"), ["Gravar", TODAY, "09:30", 4, null, null]);
   assert.deepEqual(brief("Almoço meio-dia"), ["Almoço", TODAY, "12:00", 4, null, null]);
@@ -227,6 +296,69 @@ test("adicionar rápido: #avatar pelo começo do nome; o que serve para dois fic
   assert.equal(both.title, "Foto #nonn");
   const none = quick("Foto #ninguem");
   assert.deepEqual([none.avatar_id, none.ambiguous, none.title], [null, null, "Foto #ninguem"]);
+});
+
+test("adicionar rápido: quantidade não é dia do mês, prazo não é repetição", () => {
+  // "todo dia 3 stories" é todo dia (3 stories); "todo dia 5" sozinho é todo mês
+  assert.deepEqual(brief("Postar todo dia 3 stories"), ["Postar 3 stories", TODAY, null, 4, null, "diaria"]);
+  assert.deepEqual(brief("Responder todos os dias 10 directs"), ["Responder 10 directs", TODAY, null, 4, null, "diaria"]);
+  assert.deepEqual(brief("Pagar a VPS todo dia 5 p2"), ["Pagar a VPS", "2026-12-05", null, 2, null, "mensal"]);
+  assert.deepEqual(brief("Pagar a VPS todo dia 10 às 9h"), ["Pagar a VPS", "2026-12-10", "09:00", 4, null, "mensal"]);
+  assert.deepEqual(brief("Pagar o proxy todo mês no dia 10"), ["Pagar o proxy", "2026-12-10", null, 4, null, "mensal"]);
+  assert.deepEqual(brief("Pagar o proxy todo dia 10 do mês"), ["Pagar o proxy", "2026-12-10", null, 4, null, "mensal"]);
+  // prazo em dias úteis: conta só de segunda a sexta (24/11 é terça: 5 dias úteis = terça seguinte)
+  assert.deepEqual(brief("Entregar em 5 dias úteis"), ["Entregar", "2026-12-01", null, 4, null, null]);
+});
+
+test("adicionar rápido: datas compostas", () => {
+  assert.deepEqual(brief("Gravar fim de semana que vem"), ["Gravar", "2026-11-28", null, 4, null, null]);
+  assert.equal(parseQuickAdd("Gravar no próximo fim de semana", "2026-11-28", []).due_date, "2026-12-05"); // num sábado: o seguinte
+  assert.deepEqual(brief("Gravar na quarta da semana que vem"), ["Gravar", "2026-12-02", null, 4, null, null]);
+  assert.deepEqual(brief("Gravar domingo da semana que vem"), ["Gravar", "2026-12-06", null, 4, null, null]);
+  assert.deepEqual(brief("Gravar dia 5 do mês que vem"), ["Gravar", "2026-12-05", null, 4, null, null]);
+  assert.deepEqual(brief("Postar segunda que vem"), ["Postar", "2026-11-30", null, 4, null, null]);
+  assert.deepEqual(brief("Entregar até o dia 10"), ["Entregar", "2026-12-10", null, 4, null, null]);
+  assert.deepEqual(brief("Postar para o dia 5"), ["Postar", "2026-12-05", null, 4, null, null]);
+  assert.deepEqual(brief("Gravar pro dia 5"), ["Gravar", "2026-12-05", null, 4, null, null]);
+});
+
+test("adicionar rápido: ordinais, frações e números que não são data", () => {
+  assert.deepEqual(brief("Gravar a segunda parte do vídeo"), ["Gravar a segunda parte do vídeo", null, null, 4, null, null]);
+  assert.deepEqual(brief("Fazer o dia 5 do aquecimento"), ["Fazer o dia 5 do aquecimento", null, null, 4, null, null]);
+  assert.deepEqual(brief("Suporte 24/7 no site"), ["Suporte 24/7 no site", null, null, 4, null, null]);
+  assert.deepEqual(brief("Editar 3/4 dos vídeos"), ["Editar 3/4 dos vídeos", null, null, 4, null, null]);
+  assert.equal(quick("Renovar 24/7/2027").due_date, "2027-07-24"); // com o ano, é data
+  assert.equal(quick("Fazer o dia 5 do mês").due_date, "2026-12-05");
+});
+
+test("adicionar rápido: horários da tarde e da noite; duração não é horário", () => {
+  assert.deepEqual(brief("Live 3h da tarde"), ["Live", TODAY, "15:00", 4, null, null]);
+  assert.deepEqual(brief("Postar 7h da noite amanhã"), ["Postar", "2026-11-25", "19:00", 4, null, null]);
+  assert.deepEqual(brief("Gravar 9h da manhã"), ["Gravar", TODAY, "09:00", 4, null, null]);
+  assert.deepEqual(brief("Gravar 2h de vídeo"), ["Gravar 2h de vídeo", null, null, 4, null, null]);
+  assert.deepEqual(brief("Live de 2h"), ["Live de 2h", null, null, 4, null, null]);
+});
+
+test("adicionar rápido: o título só perde o que foi reconhecido", () => {
+  assert.deepEqual(brief("Plano A"), ["Plano A", null, null, 4, null, null]);
+  assert.deepEqual(brief("Comprar vitamina E"), ["Comprar vitamina E", null, null, 4, null, null]);
+  assert.deepEqual(brief("Testar opção A amanhã"), ["Testar opção A", "2026-11-25", null, 4, null, null]);
+  assert.deepEqual(brief("Revisar to do"), ["Revisar to do", null, null, 4, null, null]);
+  assert.equal(quick("Gravar amanhã.").title, "Gravar.");
+  assert.equal(quick("Gravar amanhã, depois editar").title, "Gravar, depois editar");
+  assert.equal(quick("iPhone novo para o avatar amanhã").title, "iPhone novo para o avatar");
+  assert.equal(quick("eBook da Nonna").title, "eBook da Nonna");
+  assert.equal(quick("-10% no checkout amanhã").title, "-10% no checkout");
+  assert.equal(quick("gravar vídeos").title, "Gravar vídeos");
+});
+
+test("adicionar rápido: #nome inteiro vence; aviso de nome repetido some quando um #nome resolve", () => {
+  const people = [{ id: "ana", name: "Ana" }, { id: "clara", name: "Ana Clara" }, ...AVATARS];
+  assert.equal(parseQuickAdd("Foto #ana", TODAY, people).avatar_id, "ana");
+  assert.equal(parseQuickAdd("Foto #anaclara", TODAY, people).avatar_id, "clara");
+  assert.equal(parseQuickAdd("Foto #clara", TODAY, people).avatar_id, "clara");
+  const later = quick("Foto #nonn #fra");
+  assert.deepEqual([later.avatar_id, later.ambiguous], ["a1", null]);
 });
 
 test("adicionar rápido: o que o dono desliga volta para o título", () => {
@@ -365,8 +497,36 @@ test("painel: aquecimento atrasado, checklist de reposição e vendas da semana 
     ["vendas:2026-11-16", "a2", "/vendas?semana=2026-11-16", null, true],
   );
   assert.match(sales.reason, /Nonna Rosa/);
+  assert.deepEqual(sales.avatarIds, ["a2"]);
   // com as vendas lançadas, a tarefa some
   assert.equal(buildAutoTasks({ ...db, sales: salesFor("a1", "a2") }, TODAY).some((item) => item.kind === "vendas"), false);
+  // de dois avatares: uma tarefa só, que vale para os dois (filtros e página de cada avatar)
+  const both = buildAutoTasks({ ...db, sales: [] }, TODAY).find((item) => item.kind === "vendas");
+  assert.deepEqual([both.avatarId, both.avatarIds], [null, ["a1", "a2"]]);
+});
+
+test("painel: aquecimento que passou da data de fim, e o aviso da estrutura dispensado", () => {
+  const db = base({
+    avatars: [
+      avatar("velho", "Velho"), // calendário de 01/11: terminaria em 10/11, com dias de uso por marcar
+      avatar("ativa", "Ativa", { kit: { structure: { site: true } } }),
+    ],
+    accounts: [account("c1", "velho"), account("c2", "ativa", { status: "ativa" })],
+    warmups: [warmup("w1", "c1", "2026-11-01", 5)],
+    sales: salesFor("velho", "ativa"),
+  });
+  const late = buildAutoTasks(db, TODAY).filter((item) => item.avatarId === "velho" && item.kind === "estrutura");
+  assert.ok(late.length === 4 && late.every((item) => /passou da data de fim/.test(item.reason) && item.due === "2026-11-10"));
+  // a conta ativa com a estrutura começada é cobrada (P1, hoje)…
+  const active = buildAutoTasks(db, TODAY).filter((item) => item.avatarId === "ativa");
+  assert.deepEqual(active.map((item) => [item.title, item.priority]), [["Preparar o entregável", 1], ["Configurar o checkout", 1], ["Montar a automação", 1]]);
+  assert.ok(active.every((item) => item.avatarIds.length === 1 && item.avatarIds[0] === "ativa"));
+  // …até o dono dispensar o aviso "falta terminar a estrutura" (mesmo id do aviso)
+  const dismissed = { ...db, settings: { prefs: { ignored_warnings: ["estrutura:ativa:entregavel+checkout+automacao"] } } };
+  assert.equal(buildAutoTasks(dismissed, TODAY).some((item) => item.avatarId === "ativa"), false);
+  // marcar mais um passo muda o id: volta a ser cobrado
+  const moved = { ...dismissed, avatars: [db.avatars[0], { ...db.avatars[1], kit: { structure: { site: true, entregavel: true } } }] };
+  assert.equal(buildAutoTasks(moved, TODAY).filter((item) => item.avatarId === "ativa").length, 2);
 });
 
 test("painel: o próximo passo de cada funil e os vídeos para modelar", () => {
